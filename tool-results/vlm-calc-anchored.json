@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image, here is the exact description of the **left panel** of the TetherPay rate calculator:\n\n*   **Header Row:** Contains the label \"**You pay (INR)**\" on the left and a teal-colored badge with a dot icon that reads \"**Live quote**\" on the right.\n*   **Main Input Field:** A large, dark input box displaying the value \"**₹ 5000**\" in white text.\n*   **Preset Buttons:** A horizontal row of five rounded buttons with the following values:\n    *   ₹500\n    *   ₹2,000\n    *   **₹5,000** (This button is highlighted with a teal border and text, indicating it is selected)\n    *   ₹10,000\n    *   ₹25,000\n*   **Balance Information:** A row showing \"**Available balance**\" on the left and the amount \"**1,248.5040 USDT**\" in bold on the right.\n*   **Action Button:** A large, bright cyan/teal button spanning the width of the panel containing a lightning bolt icon and the text \"**Reserve & lock rate**\".\n*   **Footer Note:** Small grey text below the button with a shield/checkmark icon that reads: \"**Rate locked at quote time — never changes after confirmation.**\"",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789108436,
+  "id": "20260911143348469e39a9bd7e4c9d",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260911143348469e39a9bd7e4c9d",
+  "usage": {
+    "completion_tokens": 280,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1776,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2056
+  }
+}

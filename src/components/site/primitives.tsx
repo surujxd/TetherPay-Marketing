@@ -104,3 +104,14 @@ export function AuroraBackground({ className }: { className?: string }) {
     </div>
   )
 }
+
+/** Animated gradient divider between sections. */
+export function SectionDivider({ className }: { className?: string }) {
+  return (
+    <div className={cn('flex items-center justify-center gap-3 py-2', className)} aria-hidden="true">
+      <span className="h-px w-16 bg-gradient-to-r from-transparent to-[var(--accent)]/30" />
+      <span className="h-1.5 w-1.5 rotate-45 rounded-sm bg-[var(--accent)]/40" />
+      <span className="h-px w-16 bg-gradient-to-l from-transparent to-[var(--accent)]/30" />
+    </div>
+  )
+}

@@ -1,5 +1,6 @@
 import { ScrollProgress } from '@/components/site/scroll-progress'
 import { BackToTop } from '@/components/site/back-to-top'
+import { CookieConsent } from '@/components/site/cookie-consent'
 import { AuroraBackground } from '@/components/site/primitives'
 import { Navbar } from '@/components/site/navbar'
 import { Hero } from '@/components/site/hero'
@@ -8,6 +9,7 @@ import { TrustBar } from '@/components/site/trust-bar'
 import { Features } from '@/components/site/features'
 import { HowItWorks } from '@/components/site/how-it-works'
 import { NetworkChooser } from '@/components/site/network-chooser'
+import { NetworkStatusWidget } from '@/components/site/network-status-widget'
 import { RateCalculator } from '@/components/site/rate-calculator'
 import { RateExplainer } from '@/components/site/rate-explainer'
 import { AgentCalculator } from '@/components/site/agent-calculator'
@@ -41,6 +43,7 @@ export default function Home() {
         <Features />
         <HowItWorks />
         <NetworkChooser />
+        <NetworkStatusWidget />
         <RateCalculator />
         <RateExplainer />
         <AgentCalculator />
@@ -62,6 +65,7 @@ export default function Home() {
 
       <Footer />
       <BackToTop />
+      <CookieConsent />
     </div>
   )
 }

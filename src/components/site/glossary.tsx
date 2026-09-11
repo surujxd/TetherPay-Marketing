@@ -136,3 +136,42 @@ export function Glossary({ term, children, className }: GlossaryProps) {
     </span>
   )
 }
+
+/**
+ * Auto-links known glossary terms in a plain string.
+ * Splits the text on term boundaries and wraps matches in <Glossary> tooltips.
+ * Matches are case-insensitive on whole words; longer terms take priority.
+ */
+export function GlossaryText({ children, className }: { children: string; className?: string }) {
+  // Build a sorted list of terms (longest first) to avoid partial matches
+  const terms = Object.keys(GLOSSARY).sort((a, b) => b.length - a.length)
+  // Escape regex special chars and build a combined pattern (word-boundary aware)
+  const escaped = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  const pattern = new RegExp(`\\b(${escaped.join('|')})\\b`, 'gi')
+
+  const parts: React.ReactNode[] = []
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  let key = 0
+  while ((match = pattern.exec(children)) !== null) {
+    // push preceding plain text
+    if (match.index > lastIndex) {
+      parts.push(children.slice(lastIndex, match.index))
+    }
+    const matchedTerm = match[0]
+    // find the canonical key (case-insensitive)
+    const canonicalKey = terms.find((t) => t.toLowerCase() === matchedTerm.toLowerCase())
+    if (canonicalKey) {
+      parts.push(<Glossary key={`g-${key++}`} term={canonicalKey}>{matchedTerm}</Glossary>)
+    } else {
+      parts.push(matchedTerm)
+    }
+    lastIndex = match.index + match[0].length
+  }
+  // push remaining text
+  if (lastIndex < children.length) {
+    parts.push(children.slice(lastIndex))
+  }
+
+  return <span className={className}>{parts.length ? parts : children}</span>
+}

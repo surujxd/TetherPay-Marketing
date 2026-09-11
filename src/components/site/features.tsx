@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion'
 import { ArrowUpRight } from 'lucide-react'
 import { GlassCard, SectionHeading } from './primitives'
+import { GlossaryText } from './glossary'
 import { FEATURES } from './content'
 
 export function Features() {
@@ -34,7 +35,9 @@ export function Features() {
                   </span>
                 </div>
                 <h3 className="mt-5 text-lg font-semibold tracking-tight">{f.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{f.desc}</p>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  <GlossaryText>{f.desc}</GlossaryText>
+                </p>
                 <div className="mt-5 inline-flex items-center gap-1 text-sm font-medium text-[var(--accent)] opacity-0 transition-opacity group-hover:opacity-100">
                   Learn more <ArrowUpRight className="h-4 w-4" />
                 </div>

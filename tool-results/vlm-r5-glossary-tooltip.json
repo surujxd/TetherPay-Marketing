@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Cookie consent banner overlaps the \"Available Balance\" card content.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789109133,
+  "id": "20260911144531fb350287534741b3",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260911144531fb350287534741b3",
+  "usage": {
+    "completion_tokens": 13,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1735,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1748
+  }
+}

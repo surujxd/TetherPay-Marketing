@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import { SectionHeading } from './primitives'
+import { GlossaryText } from './glossary'
 import { HOW_STEPS } from './content'
 
 export function HowItWorks() {
@@ -39,7 +40,9 @@ export function HowItWorks() {
                     </div>
                   </div>
                   <h3 className="relative mt-5 text-lg font-semibold tracking-tight">{s.title}</h3>
-                  <p className="relative mt-2 text-sm leading-relaxed text-muted-foreground">{s.desc}</p>
+                  <p className="relative mt-2 text-sm leading-relaxed text-muted-foreground">
+                    <GlossaryText>{s.desc}</GlossaryText>
+                  </p>
                 </div>
 
                 {i < HOW_STEPS.length - 1 && (
