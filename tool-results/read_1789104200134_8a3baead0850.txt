@@ -1,0 +1,2002 @@
+     1→# TetherPay — Master Repository Specification & Production PRD
+     2→
+     3→> **Version:** 1.0.0  
+     4→> **Date:** 2025-06-01  
+     5→> **Status:** AUTHORITATIVE — Single Source of Truth  
+     6→> **Domain:** tetherpay.fun  
+     7→> **Support:** support@tetherpay.fun
+     8→
+     9→---
+    10→
+    11→## ⚠️ Critical Notices
+    12→
+    13→> **BRAND/TRADEMARK NOTICE:** The name "TetherPay" incorporates the word "Tether," which is associated with Tether Operations Limited (issuer of USDT). Trademark clearance from qualified IP counsel is **required** before any public launch. Do not use Tether's existing logo, visual identity, or trade dress. The product identity must be an entirely original wordmark.
+    14→
+    15→> **LEGAL/COMPLIANCE REVIEW REQUIRED:** This document describes technical architecture only. It does not establish legal permission to operate. Before any public-money launch, qualified Indian legal and compliance counsel must review the full operating structure, including VDA custody/administration, VDA-to-fiat activity, UPI/payment workflows, AML/KYC obligations, FIU registration, TDS and taxation implications, and applicable data-protection regulations (DPDPA 2023). No RBI authorization, FIU registration, banking partnerships, or regulatory approvals are claimed or implied herein.
+    16→
+    17→---
+    18→
+    19→## Table of Contents
+    20→
+    21→1. [Project Identity](#1-project-identity)
+    22→2. [Assumptions & Decisions](#2-assumptions--decisions)
+    23→3. [Business Model](#3-business-model)
+    24→4. [Technology Stack](#4-technology-stack)
+    25→5. [Repository Structure](#5-repository-structure)
+    26→6. [Design System](#6-design-system)
+    27→7. [Database Architecture](#7-database-architecture)
+    28→8. [Authentication & RBAC](#8-authentication--rbac)
+    29→9. [Ledger & Financial Model](#9-ledger--financial-model)
+    30→10. [State Machines](#10-state-machines)
+    31→11. [Financial Formulas](#11-financial-formulas)
+    32→12. [API Contracts](#12-api-contracts)
+    33→13. [Public Website Specification](#13-public-website-specification)
+    34→14. [Customer App Specification](#14-customer-app-specification)
+    35→15. [Agent App Specification](#15-agent-app-specification)
+    36→16. [Manager Portal Specification](#16-manager-portal-specification)
+    37→17. [Admin Portal Specification](#17-admin-portal-specification)
+    38→18. [Telegram Integration](#18-telegram-integration)
+    39→19. [Notifications & Realtime](#19-notifications--realtime)
+    40→20. [Referral System](#20-referral-system)
+    41→21. [Support & Dispute System](#21-support--dispute-system)
+    42→22. [Risk & Compliance](#22-risk--compliance)
+    43→23. [Treasury & Reconciliation](#23-treasury--reconciliation)
+    44→24. [Rate, Fee & Commission Engine](#24-rate-fee--commission-engine)
+    45→25. [Security Architecture](#25-security-architecture)
+    46→26. [Component Library](#26-component-library)
+    47→27. [Deployment & Infrastructure](#27-deployment--infrastructure)
+    48→28. [Local Development](#28-local-development)
+    49→29. [Testing Strategy](#29-testing-strategy)
+    50→30. [Operations Manuals](#30-operations-manuals)
+    51→31. [Legal Documentation](#31-legal-documentation)
+    52→32. [Reporting & Analytics](#32-reporting--analytics)
+    53→33. [AI Coding Guide](#33-ai-coding-guide)
+    54→34. [Production Go-Live Checklist](#34-production-go-live-checklist)
+    55→35. [Traceability Matrix](#35-traceability-matrix)
+    56→36. [Development Order](#36-development-order)
+    57→
+    58→---
+    59→
+    60→## 1. Project Identity
+    61→
+    62→| Property | Value |
+    63→|---|---|
+    64→| Product name | TetherPay |
+    65→| Primary domain | tetherpay.fun |
+    66→| Customer app | app.tetherpay.fun |
+    67→| Agent app | agent.tetherpay.fun |
+    68→| Manager portal | ops.tetherpay.fun |
+    69→| Admin portal | admin.tetherpay.fun |
+    70→| Notification backend | notifications.tetherpay.fun |
+    71→| Support email | support@tetherpay.fun |
+    72→| Primary positioning | Earn in USDT. Spend in INR. |
+    73→
+    74→### Approved Marketing Copy
+    75→
+    76→**Primary:** Earn in USDT. Spend in INR.  
+    77→**Secondary:** Deposit USDT, create an INR payment order, and have the payment fulfilled through TetherPay's verified settlement network.  
+    78→**Agent:** Provide INR liquidity. Receive USDT settlement and earn commission.
+    79→
+    80→### Prohibited Claims
+    81→
+    82→The following claims must **never** appear in any product copy, UI, or communications:
+    83→- "Guaranteed payments"
+    84→- "Zero risk"
+    85→- "Anonymous"
+    86→- "Bank-account protection"
+    87→- "Guaranteed profits" or "guaranteed earnings"
+    88→- "RBI approved" / "FIU registered" / "SEBI authorized" (unless actually established)
+    89→- Any claim of regulatory license not actually held
+    90→
+    91→---
+    92→
+    93→## 2. Assumptions & Decisions
+    94→
+    95→| # | Decision | Rationale |
+    96→|---|---|---|
+    97→| A1 | Single Next.js monorepo with role-based routing | Faster to build, separable later |
+    98→| A2 | pnpm as package manager | Faster installs, better workspace support |
+    99→| A3 | Node.js 20 LTS | Stable, supported, matches Netlify defaults |
+   100→| A4 | Supabase Auth for all authentication | Reduces external service dependencies |
+   101→| A5 | Central USDT wallet model (not per-user wallet) | Matches stated business requirement |
+   102→| A6 | Manual payment verification first (no automated chain monitoring) | Matches stated business model |
+   103→| A7 | PostgreSQL numeric(38,18) for all financial amounts | Safe decimal precision |
+   104→| A8 | HALF_UP rounding on displayed/settled amounts | Standard financial rounding |
+   105→| A9 | Supabase Realtime via PostgreSQL replication | Free tier compatible |
+   106→| A10 | Telegram as notification-only, not authorization | Security boundary |
+   107→| A11 | TRON (TRC-20) as primary USDT network | Lowest fees for USDT transfers; others configurable |
+   108→| A12 | UPI as sole INR payment method | Matches stated product scope |
+   109→| A13 | 1-level referral depth for financial rewards | Anti-MLM requirement |
+   110→| A14 | Orders expire after 10 minutes (configurable) | Backend-controlled, configurable |
+   111→| A15 | All sensitive files in Supabase private buckets | Security requirement |
+   112→| A16 | No direct balance field mutations from frontend | Ledger-only financial state |
+   113→
+   114→---
+   115→
+   116→## 3. Business Model
+   117→
+   118→### 3.1 Operational Flow
+   119→
+   120→```
+   121→CUSTOMER
+   122→    │
+   123→    │  deposits USDT to central wallet
+   124→    ▼
+   125→CENTRAL TETHERPAY USDT WALLET
+   126→    │
+   127→    │  manager manually verifies on-chain
+   128→    ▼
+   129→CUSTOMER INTERNAL USDT LEDGER (credited)
+   130→    │
+   131→    │  customer creates INR payment order
+   132→    │  (USDT reserved from available balance)
+   133→    ▼
+   134→PAYMENT ORDER MARKETPLACE (AVAILABLE state)
+   135→    │
+   136→    │  agent views and claims order
+   137→    ▼
+   138→AGENT
+   139→    │
+   140→    │  agent pays recipient via own UPI channel
+   141→    │  (agent uses personal INR funds)
+   142→    ▼
+   143→UPI RECIPIENT (payment received in INR)
+   144→    │
+   145→    │  agent submits: UTR / reference / screenshot
+   146→    ▼
+   147→MANAGER
+   148→    │
+   149→    │  manually verifies payment
+   150→    ▼
+   151→    ├── REJECTED → order re-enters marketplace or refunded
+   152→    └── APPROVED
+   153→           │
+   154→           ▼
+   155→    AGENT USDT SETTLEMENT
+   156→    (reimbursement + commission credited to agent wallet)
+   157→           │
+   158→           │  agent requests USDT payout
+   159→           ▼
+   160→    ADMIN/TREASURY
+   161→    (manual USDT transfer to agent's external wallet)
+   162→```
+   163→
+   164→### 3.2 Revenue Model
+   165→
+   166→```
+   167→Customer pays:   INR amount + platform fee (converted to USDT debit)
+   168→Agent receives:  USDT equivalent of INR paid + commission
+   169→Platform earns:  Spread between customer rate and agent rate + fees - commissions
+   170→```
+   171→
+   172→### 3.3 Central Wallet Model
+   173→
+   174→```
+   175→Customer A ─┐
+   176→Customer B ─┼──▶ Central TetherPay USDT Wallet (single address per network)
+   177→Customer C ─┘
+   178→```
+   179→
+   180→- Customers send USDT to the **central wallet address**.
+   181→- Customers submit a deposit request with TX hash.
+   182→- Managers verify on-chain and approve/reject.
+   183→- The application's internal ledger is the source of truth for individual balances.
+   184→
+   185→---
+   186→
+   187→## 4. Technology Stack
+   188→
+   189→### 4.1 Core Stack
+   190→
+   191→| Layer | Technology | Version |
+   192→|---|---|---|
+   193→| Framework | Next.js (App Router) | 14.x |
+   194→| Language | TypeScript | 5.x |
+   195→| Styling | Tailwind CSS | 3.x |
+   196→| UI components | Custom + Radix UI primitives | latest |
+   197→| Icons | Lucide React | latest |
+   198→| Database | Supabase (PostgreSQL 15) | latest |
+   199→| Auth | Supabase Auth | latest |
+   200→| Realtime | Supabase Realtime | latest |
+   201→| Storage | Supabase Storage | latest |
+   202→| Hosting | Netlify | — |
+   203→| CDN/DNS | Cloudflare | — |
+   204→| Repository | GitHub | — |
+   205→| Notifications | Telegram Bot API | — |
+   206→| Package manager | pnpm | 8.x |
+   207→| Node version | 20 LTS | 20.x |
+   208→
+   209→### 4.2 Key Libraries
+   210→
+   211→```json
+   212→{
+   213→  "dependencies": {
+   214→    "next": "14.x",
+   215→    "react": "18.x",
+   216→    "react-dom": "18.x",
+   217→    "@supabase/supabase-js": "2.x",
+   218→    "@supabase/ssr": "0.x",
+   219→    "decimal.js": "10.x",
+   220→    "zod": "3.x",
+   221→    "date-fns": "3.x",
+   222→    "react-hook-form": "7.x",
+   223→    "@hookform/resolvers": "3.x",
+   224→    "lucide-react": "latest",
+   225→    "@radix-ui/react-dialog": "latest",
+   226→    "@radix-ui/react-dropdown-menu": "latest",
+   227→    "@radix-ui/react-tabs": "latest",
+   228→    "@radix-ui/react-toast": "latest",
+   229→    "@radix-ui/react-tooltip": "latest",
+   230→    "@radix-ui/react-switch": "latest",
+   231→    "@radix-ui/react-select": "latest",
+   232→    "@radix-ui/react-sheet": "latest",
+   233→    "clsx": "latest",
+   234→    "tailwind-merge": "latest",
+   235→    "class-variance-authority": "latest",
+   236→    "sonner": "latest",
+   237→    "qr-scanner": "latest",
+   238→    "nanoid": "latest",
+   239→    "jose": "latest"
+   240→  },
+   241→  "devDependencies": {
+   242→    "typescript": "5.x",
+   243→    "@types/node": "20.x",
+   244→    "@types/react": "18.x",
+   245→    "tailwindcss": "3.x",
+   246→    "postcss": "latest",
+   247→    "autoprefixer": "latest",
+   248→    "eslint": "8.x",
+   249→    "prettier": "3.x",
+   250→    "vitest": "1.x",
+   251→    "@testing-library/react": "14.x",
+   252→    "@playwright/test": "latest",
+   253→    "supabase": "latest"
+   254→  }
+   255→}
+   256→```
+   257→
+   258→### 4.3 Financial Arithmetic
+   259→
+   260→**NEVER use JavaScript native `number` or `float` for financial amounts.**
+   261→
+   262→All financial calculations use `decimal.js`:
+   263→
+   264→```typescript
+   265→import Decimal from 'decimal.js';
+   266→
+   267→Decimal.set({ precision: 38, rounding: Decimal.ROUND_HALF_UP });
+   268→
+   269→// Agent settlement example
+   270→function calculateAgentSettlement(inrPaid: string, agentRate: string, commissionRate: string) {
+   271→  const inr = new Decimal(inrPaid);
+   272→  const rate = new Decimal(agentRate);
+   273→  const commission = new Decimal(commissionRate).div(100);
+   274→
+   275→  const baseUsdt = inr.div(rate);
+   276→  const commissionInr = inr.mul(commission);
+   277→  const commissionUsdt = commissionInr.div(rate);
+   278→  const totalUsdt = baseUsdt.add(commissionUsdt);
+   279→
+   280→  return {
+   281→    baseUsdt: baseUsdt.toFixed(8),
+   282→    commissionInr: commissionInr.toFixed(2),
+   283→    commissionUsdt: commissionUsdt.toFixed(8),
+   284→    totalUsdt: totalUsdt.toFixed(8),
+   285→  };
+   286→}
+   287→```
+   288→
+   289→All amounts stored in PostgreSQL as `numeric(38,18)`.
+   290→
+   291→---
+   292→
+   293→## 5. Repository Structure
+   294→
+   295→```
+   296→tetherpay/
+   297→├── .env.example
+   298→├── .eslintrc.json
+   299→├── .gitignore
+   300→├── .nvmrc                          # "20"
+   301→├── .prettierrc
+   302→├── netlify.toml
+   303→├── package.json
+   304→├── pnpm-lock.yaml
+   305→├── pnpm-workspace.yaml
+   306→├── tsconfig.json
+   307→├── README.md
+   308→│
+   309→├── apps/
+   310→│   └── web/                        # Single Next.js app (all portals)
+   311→│       ├── next.config.ts
+   312→│       ├── tailwind.config.ts
+   313→│       ├── postcss.config.js
+   314→│       ├── public/
+   315→│       │   ├── favicon.ico
+   316→│       │   ├── icons/              # PWA icons
+   317→│       │   ├── images/
+   318→│       │   └── manifest.json
+   319→│       └── src/
+   320→│           ├── app/                # Next.js App Router
+   321→│           │   ├── (public)/       # Public website routes
+   322→│           │   │   ├── page.tsx
+   323→│           │   │   ├── about/
+   324→│           │   │   ├── how-it-works/
+   325→│           │   │   ├── fees/
+   326→│           │   │   ├── security/
+   327→│           │   │   ├── agents/
+   328→│           │   │   ├── referrals/
+   329→│           │   │   ├── faq/
+   330→│           │   │   ├── contact/
+   331→│           │   │   ├── support/
+   332→│           │   │   ├── status/
+   333→│           │   │   ├── login/
+   334→│           │   │   ├── register/
+   335→│           │   │   ├── terms/
+   336→│           │   │   ├── privacy/
+   337→│           │   │   ├── cookies/
+   338→│           │   │   ├── risk-disclosure/
+   339→│           │   │   ├── acceptable-use/
+   340→│           │   │   ├── aml-policy/
+   341→│           │   │   ├── kyc-policy/
+   342→│           │   │   ├── referral-terms/
+   343→│           │   │   ├── agent-terms/
+   344→│           │   │   ├── payment-terms/
+   345→│           │   │   ├── refund-policy/
+   346→│           │   │   ├── complaints/
+   347→│           │   │   └── law-enforcement/
+   348→│           │   ├── (customer)/     # Customer app — requires customer auth
+   349→│           │   │   └── app/
+   350→│           │   │       ├── layout.tsx
+   351→│           │   │       ├── dashboard/
+   352→│           │   │       ├── wallet/
+   353→│           │   │       │   ├── page.tsx
+   354→│           │   │       │   └── deposit/
+   355→│           │   │       │       ├── page.tsx
+   356→│           │   │       │       └── [id]/
+   357→│           │   │       ├── activity/
+   358→│           │   │       │   ├── page.tsx
+   359→│           │   │       │   └── [id]/
+   360→│           │   │       ├── pay/
+   361→│           │   │       │   ├── page.tsx
+   362→│           │   │       │   ├── qr/
+   363→│           │   │       │   ├── manual/
+   364→│           │   │       │   ├── review/
+   365→│           │   │       │   └── success/
+   366→│           │   │       ├── orders/
+   367→│           │   │       │   ├── page.tsx
+   368→│           │   │       │   └── [id]/
+   369→│           │   │       ├── referrals/
+   370→│           │   │       │   ├── page.tsx
+   371→│           │   │       │   └── how-it-works/
+   372→│           │   │       ├── notifications/
+   373→│           │   │       ├── support/
+   374→│           │   │       │   ├── page.tsx
+   375→│           │   │       │   ├── new/
+   376→│           │   │       │   └── [id]/
+   377→│           │   │       ├── profile/
+   378→│           │   │       ├── security/
+   379→│           │   │       ├── settings/
+   380→│           │   │       └── help/
+   381→│           │   ├── (agent)/        # Agent app — requires agent auth
+   382→│           │   │   └── agent/
+   383→│           │   │       ├── layout.tsx
+   384→│           │   │       ├── dashboard/
+   385→│           │   │       ├── onboarding/
+   386→│           │   │       │   ├── profile/
+   387→│           │   │       │   ├── verification/
+   388→│           │   │       │   ├── payment-channel/
+   389→│           │   │       │   ├── agreement/
+   390→│           │   │       │   └── training/
+   391→│           │   │       ├── orders/
+   392→│           │   │       │   ├── page.tsx
+   393→│           │   │       │   ├── [id]/
+   394→│           │   │       │   ├── active/
+   395→│           │   │       │   └── completed/
+   396→│           │   │       ├── wallet/
+   397→│           │   │       │   ├── page.tsx
+   398→│           │   │       │   └── activity/
+   399→│           │   │       ├── withdraw/
+   400→│           │   │       ├── withdrawals/
+   401→│           │   │       ├── partners/
+   402→│           │   │       │   ├── page.tsx
+   403→│           │   │       │   └── [id]/
+   404→│           │   │       ├── referrals/
+   405→│           │   │       ├── earnings/
+   406→│           │   │       ├── performance/
+   407→│           │   │       ├── notifications/
+   408→│           │   │       ├── support/
+   409→│           │   │       ├── security/
+   410→│           │   │       ├── settings/
+   411→│           │   │       └── help/
+   412→│           │   ├── (ops)/          # Manager portal — requires ops auth
+   413→│           │   │   └── ops/
+   414→│           │   │       ├── layout.tsx
+   415→│           │   │       ├── page.tsx
+   416→│           │   │       ├── deposits/
+   417→│           │   │       │   ├── page.tsx
+   418→│           │   │       │   ├── [id]/
+   419→│           │   │       │   └── unmatched/
+   420→│           │   │       ├── payments/
+   421→│           │   │       │   ├── page.tsx
+   422→│           │   │       │   └── [id]/
+   423→│           │   │       ├── disputes/
+   424→│           │   │       │   ├── page.tsx
+   425→│           │   │       │   └── [id]/
+   426→│           │   │       ├── users/
+   427→│           │   │       │   ├── page.tsx
+   428→│           │   │       │   └── [id]/
+   429→│           │   │       ├── agents/
+   430→│           │   │       │   ├── page.tsx
+   431→│           │   │       │   └── [id]/
+   432→│           │   │       ├── risk/
+   433→│           │   │       │   ├── page.tsx
+   434→│           │   │       │   └── [id]/
+   435→│           │   │       ├── support/
+   436→│           │   │       │   ├── page.tsx
+   437→│           │   │       │   └── [id]/
+   438→│           │   │       ├── activity/
+   439→│           │   │       └── profile/
+   440→│           │   ├── (admin)/        # Admin portal — requires admin auth
+   441→│           │   │   └── admin/
+   442→│           │   │       ├── layout.tsx
+   443→│           │   │       ├── page.tsx
+   444→│           │   │       ├── customers/
+   445→│           │   │       │   ├── page.tsx
+   446→│           │   │       │   └── [id]/
+   447→│           │   │       ├── agents/
+   448→│           │   │       │   ├── page.tsx
+   449→│           │   │       │   └── [id]/
+   450→│           │   │       ├── managers/
+   451→│           │   │       │   ├── page.tsx
+   452→│           │   │       │   └── [id]/
+   453→│           │   │       ├── deposits/
+   454→│           │   │       ├── payments/
+   455→│           │   │       ├── settlements/
+   456→│           │   │       ├── withdrawals/
+   457→│           │   │       ├── disputes/
+   458→│           │   │       ├── treasury/
+   459→│           │   │       ├── reconciliation/
+   460→│           │   │       ├── rates/
+   461→│           │   │       ├── fees/
+   462→│           │   │       ├── commissions/
+   463→│           │   │       ├── referrals/
+   464→│           │   │       │   ├── page.tsx
+   465→│           │   │       │   ├── rewards/
+   466→│           │   │       │   ├── fraud/
+   467→│           │   │       │   └── settings/
+   468→│           │   │       ├── risk/
+   469→│           │   │       ├── compliance/
+   470→│           │   │       ├── notifications/
+   471→│           │   │       ├── telegram/
+   472→│           │   │       ├── reports/
+   473→│           │   │       ├── audit/
+   474→│           │   │       ├── settings/
+   475→│           │   │       ├── security/
+   476→│           │   │       └── emergency/
+   477→│           │   └── api/            # Next.js Route Handlers
+   478→│           │       ├── auth/
+   479→│           │       ├── deposits/
+   480→│           │       ├── orders/
+   481→│           │       ├── agent/
+   482→│           │       ├── referrals/
+   483→│           │       ├── telegram/
+   484→│           │       │   └── webhook/
+   485→│           │       ├── notifications/
+   486→│           │       ├── treasury/
+   487→│           │       ├── reports/
+   488→│           │       └── health/
+   489→│           ├── components/
+   490→│           │   ├── ui/             # Base UI components
+   491→│           │   ├── financial/      # Financial display components
+   492→│           │   ├── forms/          # Form components
+   493→│           │   ├── layouts/        # Layout components
+   494→│           │   ├── navigation/     # Nav components
+   495→│           │   └── shared/         # Shared business components
+   496→│           ├── lib/
+   497→│           │   ├── supabase/
+   498→│           │   │   ├── client.ts
+   499→│           │   │   ├── server.ts
+   500→│           │   │   └── admin.ts
+   501→│           │   ├── auth/
+   502→│           │   ├── ledger/
+   503→│           │   ├── financial/
+   504→│           │   │   ├── decimal.ts
+   505→│           │   │   ├── formulas.ts
+   506→│           │   │   └── formatting.ts
+   507→│           │   ├── telegram/
+   508→│           │   ├── notifications/
+   509→│           │   ├── email/
+   510→│           │   ├── risk/
+   511→│           │   ├── audit/
+   512→│           │   └── utils/
+   513→│           ├── hooks/
+   514→│           ├── stores/
+   515→│           ├── types/
+   516→│           └── middleware.ts
+   517→│
+   518→├── supabase/
+   519→│   ├── config.toml
+   520→│   ├── migrations/
+   521→│   │   ├── 001_extensions.sql
+   522→│   │   ├── 002_enums.sql
+   523→│   │   ├── 003_profiles.sql
+   524→│   │   ├── 004_roles_permissions.sql
+   525→│   │   ├── 005_wallets.sql
+   526→│   │   ├── 006_ledger.sql
+   527→│   │   ├── 007_deposits.sql
+   528→│   │   ├── 008_payment_orders.sql
+   529→│   │   ├── 009_agents.sql
+   530→│   │   ├── 010_settlements.sql
+   531→│   │   ├── 011_commissions.sql
+   532→│   │   ├── 012_referrals.sql
+   533→│   │   ├── 013_notifications.sql
+   534→│   │   ├── 014_telegram.sql
+   535→│   │   ├── 015_support.sql
+   536→│   │   ├── 016_disputes.sql
+   537→│   │   ├── 017_risk.sql
+   538→│   │   ├── 018_audit.sql
+   539→│   │   ├── 019_settings.sql
+   540→│   │   └── 020_reporting.sql
+   541→│   ├── seed/
+   542→│   │   ├── dev_seed.sql
+   543→│   │   └── README.md
+   544→│   └── functions/
+   545→│       ├── approve-deposit/
+   546→│       ├── create-payment-order/
+   547→│       ├── claim-order/
+   548→│       ├── submit-payment/
+   549→│       ├── approve-payment/
+   550→│       ├── post-settlement/
+   551→│       ├── request-withdrawal/
+   552→│       ├── approve-withdrawal/
+   553→│       └── credit-referral/
+   554→│
+   555→├── docs/
+   556→│   ├── architecture.md
+   557→│   ├── database.md
+   558→│   ├── api.md
+   559→│   ├── auth.md
+   560→│   ├── security.md
+   561→│   ├── ledger.md
+   562→│   ├── deposits.md
+   563→│   ├── payments.md
+   564→│   ├── agents.md
+   565→│   ├── referrals.md
+   566→│   ├── notifications.md
+   567→│   ├── telegram.md
+   568→│   ├── operations.md
+   569→│   ├── treasury.md
+   570→│   ├── compliance.md
+   571→│   ├── admin.md
+   572→│   ├── deployment.md
+   573→│   ├── local-development.md
+   574→│   ├── testing.md
+   575→│   ├── incident-response.md
+   576→│   ├── customer-guide.md
+   577→│   ├── agent-guide.md
+   578→│   └── manager-guide.md
+   579→│
+   580→├── tests/
+   581→│   ├── unit/
+   582→│   │   ├── financial/
+   583→│   │   ├── state-machines/
+   584→│   │   └── permissions/
+   585→│   ├── integration/
+   586→│   │   ├── deposits/
+   587→│   │   ├── orders/
+   588→│   │   └── settlements/
+   589→│   └── e2e/
+   590→│       ├── customer.spec.ts
+   591→│       ├── agent.spec.ts
+   592→│       ├── manager.spec.ts
+   593→│       └── admin.spec.ts
+   594→│
+   595→└── scripts/
+   596→    ├── setup-local.sh
+   597→    ├── reset-db.sh
+   598→    └── migrate.sh
+   599→```
+   600→
+   601→---
+   602→
+   603→## 6. Design System
+   604→
+   605→### 6.1 Visual Direction
+   606→
+   607→**Premium fintech + Liquid Glass aesthetics:**
+   608→- Translucent layered surfaces
+   609→- Soft depth and blur
+   610→- Rounded cards
+   611→- Floating navigation
+   612→- Restrained micro-animations
+   613→- Excellent typography hierarchy
+   614→- Strong spatial rhythm
+   615→
+   616→### 6.2 Color Tokens
+   617→
+   618→```typescript
+   619→// tailwind.config.ts
+   620→export const colors = {
+   621→  // Backgrounds
+   622→  'bg-primary': '#F5F7FA',        // Light mode
+   623→  'bg-primary-dark': '#070A0E',   // Dark mode
+   624→  'bg-surface': '#FFFFFF',
+   625→  'bg-surface-dark': '#0F1419',
+   626→  'bg-elevated': '#FFFFFF',
+   627→  'bg-elevated-dark': '#161C24',
+   628→
+   629→  // Text
+   630→  'text-primary': '#111827',
+   631→  'text-secondary': '#667085',
+   632→  'text-tertiary': '#9CA3AF',
+   633→  'text-inverse': '#FFFFFF',
+   634→
+   635→  // Accent
+   636→  'accent': '#16A6A3',
+   637→  'accent-light': '#E0F7F6',
+   638→  'accent-dark': '#0D7E7C',
+   639→
+   640→  // Semantic
+   641→  'success': '#16A34A',
+   642→  'success-light': '#DCFCE7',
+   643→  'warning': '#D97706',
+   644→  'warning-light': '#FEF3C7',
+   645→  'danger': '#DC2626',
+   646→  'danger-light': '#FEE2E2',
+   647→  'info': '#2563EB',
+   648→  'info-light': '#DBEAFE',
+   649→
+   650→  // Glass
+   651→  'glass-light': 'rgba(255,255,255,0.70)',
+   652→  'glass-dark': 'rgba(15,20,25,0.70)',
+   653→  'glass-border-light': 'rgba(255,255,255,0.40)',
+   654→  'glass-border-dark': 'rgba(255,255,255,0.08)',
+   655→};
+   656→```
+   657→
+   658→### 6.3 Typography
+   659→
+   660→```typescript
+   661→export const typography = {
+   662→  fontFamily: {
+   663→    sans: ['Inter', 'system-ui', 'sans-serif'],
+   664→    mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+   665→  },
+   666→  fontSize: {
+   667→    'xs': ['11px', { lineHeight: '16px', letterSpacing: '0.02em' }],
+   668→    'sm': ['13px', { lineHeight: '20px' }],
+   669→    'base': ['15px', { lineHeight: '24px' }],
+   670→    'lg': ['17px', { lineHeight: '28px' }],
+   671→    'xl': ['20px', { lineHeight: '32px' }],
+   672→    '2xl': ['24px', { lineHeight: '36px' }],
+   673→    '3xl': ['30px', { lineHeight: '40px' }],
+   674→    '4xl': ['36px', { lineHeight: '48px' }],
+   675→  },
+   676→  fontWeight: {
+   677→    normal: '400',
+   678→    medium: '500',
+   679→    semibold: '600',
+   680→    bold: '700',
+   681→  },
+   682→};
+   683→```
+   684→
+   685→### 6.4 Spacing Scale
+   686→
+   687→```
+   688→4, 8, 12, 16, 20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 128
+   689→```
+   690→
+   691→### 6.5 Border Radius
+   692→
+   693→```
+   694→sm:      8px   (inputs, chips)
+   695→md:      12px  (small cards, badges)
+   696→lg:      16px  (standard cards)
+   697→xl:      20px  (large cards)
+   698→2xl:     24px  (primary cards)
+   699→3xl:     28px  (hero surfaces)
+   700→full:    9999px (pills, avatars)
+   701→```
+   702→
+   703→### 6.6 Shadows
+   704→
+   705→```css
+   706→--shadow-xs:   0 1px 2px rgba(0,0,0,0.05);
+   707→--shadow-sm:   0 2px 4px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+   708→--shadow-md:   0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+   709→--shadow-lg:   0 8px 24px rgba(0,0,0,0.10), 0 4px 8px rgba(0,0,0,0.06);
+   710→--shadow-xl:   0 16px 48px rgba(0,0,0,0.12), 0 8px 16px rgba(0,0,0,0.08);
+   711→--shadow-glass: 0 8px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5);
+   712→```
+   713→
+   714→### 6.7 Blur Values
+   715→
+   716→```
+   717→blur-sm:   8px
+   718→blur-md:   16px
+   719→blur-lg:   24px
+   720→blur-xl:   40px
+   721→```
+   722→
+   723→### 6.8 Animation Tokens
+   724→
+   725→```css
+   726→--duration-fast:    120ms
+   727→--duration-normal:  200ms
+   728→--duration-slow:    320ms
+   729→--duration-slower:  500ms
+   730→--ease-default:     cubic-bezier(0.4, 0, 0.2, 1)
+   731→--ease-spring:      cubic-bezier(0.34, 1.56, 0.64, 1)
+   732→--ease-out:         cubic-bezier(0, 0, 0.2, 1)
+   733→```
+   734→
+   735→Reduced-motion: all transitions set to `0ms` when `prefers-reduced-motion: reduce`.
+   736→
+   737→### 6.9 Breakpoints
+   738→
+   739→```
+   740→xs:   360px
+   741→sm:   375px
+   742→md:   768px
+   743→lg:   1024px
+   744→xl:   1280px
+   745→2xl:  1440px
+   746→```
+   747→
+   748→### 6.10 Touch Targets
+   749→
+   750→Minimum touch target: **44×44px** on all interactive elements.
+   751→
+   752→### 6.11 Glass Component Style
+   753→
+   754→```typescript
+   755→// GlassCard component
+   756→const glassStyles = {
+   757→  base: [
+   758→    'rounded-2xl',
+   759→    'border border-white/40 dark:border-white/8',
+   760→    'bg-white/70 dark:bg-slate-900/70',
+   761→    'backdrop-blur-xl',
+   762→    'shadow-glass',
+   763→  ].join(' '),
+   764→};
+   765→```
+   766→
+   767→### 6.12 Dark Mode
+   768→
+   769→Support: `system | light | dark` — stored in localStorage and user profile.  
+   770→Dark glass uses darker translucent materials preserving readability.  
+   771→Reduced transparency option eliminates `backdrop-filter` and opacity.
+   772→
+   773→---
+   774→
+   775→## 7. Database Architecture
+   776→
+   777→### 7.1 Migration 001 — Extensions
+   778→
+   779→```sql
+   780→-- 001_extensions.sql
+   781→CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+   782→CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+   783→CREATE EXTENSION IF NOT EXISTS "pg_trgm";  -- For text search
+   784→```
+   785→
+   786→### 7.2 Migration 002 — Enums
+   787→
+   788→```sql
+   789→-- 002_enums.sql
+   790→
+   791→CREATE TYPE user_role AS ENUM (
+   792→  'OWNER',
+   793→  'SUPER_ADMIN',
+   794→  'FINANCE_ADMIN',
+   795→  'TREASURY_ADMIN',
+   796→  'COMPLIANCE_ADMIN',
+   797→  'OPERATIONS_MANAGER',
+   798→  'DEPOSIT_REVIEWER',
+   799→  'PAYMENT_REVIEWER',
+   800→  'AGENT_MANAGER',
+   801→  'SUPPORT_AGENT',
+   802→  'AUDITOR',
+   803→  'AGENT',
+   804→  'CUSTOMER'
+   805→);
+   806→
+   807→CREATE TYPE kyc_status AS ENUM (
+   808→  'NOT_STARTED',
+   809→  'PENDING',
+   810→  'UNDER_REVIEW',
+   811→  'APPROVED',
+   812→  'REJECTED',
+   813→  'EXPIRED'
+   814→);
+   815→
+   816→CREATE TYPE deposit_status AS ENUM (
+   817→  'CREATED',
+   818→  'TX_SUBMITTED',
+   819→  'PENDING_VERIFICATION',
+   820→  'VERIFIED',
+   821→  'CREDITED',
+   822→  'REJECTED',
+   823→  'ESCALATED',
+   824→  'DUPLICATE',
+   825→  'RISK_HOLD'
+   826→);
+   827→
+   828→CREATE TYPE order_status AS ENUM (
+   829→  'DRAFT',
+   830→  'QUOTE_CREATED',
+   831→  'CONFIRMED',
+   832→  'FUNDS_RESERVED',
+   833→  'AVAILABLE',
+   834→  'ASSIGNED',
+   835→  'PAYMENT_SUBMITTED',
+   836→  'MANAGER_REVIEW',
+   837→  'APPROVED',
+   838→  'COMPLETED',
+   839→  'AGENT_SETTLEMENT_POSTED',
+   840→  'COMMISSION_POSTED',
+   841→  'REJECTED',
+   842→  'DISPUTED',
+   843→  'EXPIRED',
+   844→  'CANCELLED',
+   845→  'REFUNDED'
+   846→);
+   847→
+   848→CREATE TYPE withdrawal_status AS ENUM (
+   849→  'REQUESTED',
+   850→  'RISK_CHECK',
+   851→  'ADMIN_REVIEW',
+   852→  'APPROVED',
+   853→  'PROCESSING',
+   854→  'PAID',
+   855→  'REJECTED',
+   856→  'HELD',
+   857→  'CANCELLED'
+   858→);
+   859→
+   860→CREATE TYPE agent_status AS ENUM (
+   861→  'PENDING_ONBOARDING',
+   862→  'UNDER_REVIEW',
+   863→  'ACTIVE',
+   864→  'LIMITED',
+   865→  'SUSPENDED',
+   866→  'BANNED'
+   867→);
+   868→
+   869→CREATE TYPE network_type AS ENUM (
+   870→  'TRON',
+   871→  'ETHEREUM',
+   872→  'BNB_SMART_CHAIN',
+   873→  'POLYGON'
+   874→);
+   875→
+   876→CREATE TYPE token_type AS ENUM (
+   877→  'USDT',
+   878→  'USDC'
+   879→);
+   880→
+   881→CREATE TYPE ledger_direction AS ENUM ('DEBIT', 'CREDIT');
+   882→
+   883→CREATE TYPE ledger_entry_type AS ENUM (
+   884→  'DEPOSIT_CREDIT',
+   885→  'ORDER_RESERVE',
+   886→  'ORDER_RELEASE',
+   887→  'ORDER_DEBIT',
+   888→  'AGENT_SETTLEMENT_CREDIT',
+   889→  'AGENT_COMMISSION_CREDIT',
+   890→  'AGENT_WITHDRAWAL_RESERVE',
+   891→  'AGENT_WITHDRAWAL_DEBIT',
+   892→  'REFERRAL_REWARD_CREDIT',
+   893→  'MANUAL_ADJUSTMENT',
+   894→  'REVERSAL'
+   895→);
+   896→
+   897→CREATE TYPE support_status AS ENUM (
+   898→  'OPEN',
+   899→  'ASSIGNED',
+   900→  'WAITING_CUSTOMER',
+   901→  'WAITING_AGENT',
+   902→  'ESCALATED',
+   903→  'RESOLVED',
+   904→  'CLOSED'
+   905→);
+   906→
+   907→CREATE TYPE dispute_status AS ENUM (
+   908→  'OPEN',
+   909→  'INVESTIGATING',
+   910→  'WAITING_CUSTOMER',
+   911→  'WAITING_AGENT',
+   912→  'ESCALATED',
+   913→  'RESOLVED'
+   914→);
+   915→
+   916→CREATE TYPE risk_level AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL');
+   917→
+   918→CREATE TYPE risk_flag AS ENUM (
+   919→  'HIGH_VALUE',
+   920→  'UNUSUAL_VELOCITY',
+   921→  'MULTIPLE_ACCOUNTS',
+   922→  'SUSPICIOUS_WALLET',
+   923→  'PAYMENT_DISPUTE',
+   924→  'AGENT_BEHAVIOR',
+   925→  'MANUAL_REVIEW'
+   926→);
+   927→
+   928→CREATE TYPE notification_type AS ENUM (
+   929→  'TRANSACTION',
+   930→  'ORDER',
+   931→  'SECURITY',
+   932→  'REFERRAL',
+   933→  'SYSTEM',
+   934→  'PROMOTION'
+   935→);
+   936→
+   937→CREATE TYPE notification_channel AS ENUM (
+   938→  'IN_APP',
+   939→  'TELEGRAM',
+   940→  'EMAIL',
+   941→  'SMS'
+   942→);
+   943→
+   944→CREATE TYPE ticket_priority AS ENUM ('LOW', 'NORMAL', 'HIGH', 'URGENT');
+   945→```
+   946→
+   947→### 7.3 Migration 003 — Profiles
+   948→
+   949→```sql
+   950→-- 003_profiles.sql
+   951→
+   952→CREATE TABLE profiles (
+   953→  id            uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+   954→  role          user_role NOT NULL DEFAULT 'CUSTOMER',
+   955→  email         text UNIQUE NOT NULL,
+   956→  phone         text UNIQUE,
+   957→  full_name     text,
+   958→  display_name  text,
+   959→  avatar_url    text,
+   960→  kyc_status    kyc_status NOT NULL DEFAULT 'NOT_STARTED',
+   961→  risk_level    risk_level NOT NULL DEFAULT 'LOW',
+   962→  is_active     boolean NOT NULL DEFAULT true,
+   963→  is_frozen     boolean NOT NULL DEFAULT false,
+   964→  frozen_reason text,
+   965→  frozen_at     timestamptz,
+   966→  frozen_by     uuid REFERENCES profiles(id),
+   967→  referral_code text UNIQUE,
+   968→  referred_by   uuid REFERENCES profiles(id),
+   969→  telegram_chat_id   bigint UNIQUE,
+   970→  telegram_linked_at timestamptz,
+   971→  totp_enabled  boolean NOT NULL DEFAULT false,
+   972→  last_login_at timestamptz,
+   973→  last_login_ip inet,
+   974→  created_at    timestamptz NOT NULL DEFAULT now(),
+   975→  updated_at    timestamptz NOT NULL DEFAULT now(),
+   976→
+   977→  CONSTRAINT profiles_email_check CHECK (email ~* '^[^@]+@[^@]+\.[^@]+$')
+   978→);
+   979→
+   980→CREATE INDEX idx_profiles_role ON profiles(role);
+   981→CREATE INDEX idx_profiles_referral_code ON profiles(referral_code);
+   982→CREATE INDEX idx_profiles_referred_by ON profiles(referred_by);
+   983→CREATE INDEX idx_profiles_email_trgm ON profiles USING gin(email gin_trgm_ops);
+   984→CREATE INDEX idx_profiles_phone ON profiles(phone);
+   985→
+   986→-- KYC documents
+   987→CREATE TABLE kyc_documents (
+   988→  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+   989→  user_id         uuid NOT NULL REFERENCES profiles(id),
+   990→  document_type   text NOT NULL,  -- 'AADHAAR' | 'PAN' | 'PASSPORT' | 'VOTER_ID' | 'DRIVING_LICENSE'
+   991→  document_number text,           -- stored encrypted or hashed
+   992→  front_file_path text,
+   993→  back_file_path  text,
+   994→  selfie_file_path text,
+   995→  status          kyc_status NOT NULL DEFAULT 'PENDING',
+   996→  verified_by     uuid REFERENCES profiles(id),
+   997→  verified_at     timestamptz,
+   998→  rejected_reason text,
+   999→  reviewer_notes  text,
+  1000→  screening_result jsonb,         -- AML screening payload
+  1001→  expires_at      timestamptz,
+  1002→  created_at      timestamptz NOT NULL DEFAULT now(),
+  1003→  updated_at      timestamptz NOT NULL DEFAULT now()
+  1004→);
+  1005→
+  1006→CREATE INDEX idx_kyc_documents_user_id ON kyc_documents(user_id);
+  1007→
+  1008→-- Session/device tracking
+  1009→CREATE TABLE user_sessions (
+  1010→  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1011→  user_id     uuid NOT NULL REFERENCES profiles(id),
+  1012→  session_token text,             -- hashed reference
+  1013→  device_name text,
+  1014→  device_type text,
+  1015→  browser     text,
+  1016→  os          text,
+  1017→  ip_address  inet,
+  1018→  country     text,
+  1019→  is_active   boolean NOT NULL DEFAULT true,
+  1020→  last_active_at timestamptz NOT NULL DEFAULT now(),
+  1021→  created_at  timestamptz NOT NULL DEFAULT now(),
+  1022→  revoked_at  timestamptz,
+  1023→  revoked_reason text
+  1024→);
+  1025→
+  1026→CREATE INDEX idx_user_sessions_user_id ON user_sessions(user_id);
+  1027→CREATE INDEX idx_user_sessions_active ON user_sessions(user_id, is_active);
+  1028→```
+  1029→
+  1030→### 7.4 Migration 004 — Roles & Permissions
+  1031→
+  1032→```sql
+  1033→-- 004_roles_permissions.sql
+  1034→
+  1035→-- Role permission matrix (enforced in application layer + RLS)
+  1036→CREATE TABLE role_permissions (
+  1037→  id         uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1038→  role       user_role NOT NULL,
+  1039→  resource   text NOT NULL,   -- e.g. 'deposits', 'orders', 'users'
+  1040→  action     text NOT NULL,   -- e.g. 'view', 'create', 'approve', 'reject'
+  1041→  created_at timestamptz NOT NULL DEFAULT now(),
+  1042→
+  1043→  UNIQUE(role, resource, action)
+  1044→);
+  1045→
+  1046→-- Insert default permissions
+  1047→INSERT INTO role_permissions (role, resource, action) VALUES
+  1048→  -- CUSTOMER
+  1049→  ('CUSTOMER', 'own_profile', 'view'),
+  1050→  ('CUSTOMER', 'own_profile', 'update'),
+  1051→  ('CUSTOMER', 'own_deposits', 'view'),
+  1052→  ('CUSTOMER', 'own_deposits', 'create'),
+  1053→  ('CUSTOMER', 'own_orders', 'view'),
+  1054→  ('CUSTOMER', 'own_orders', 'create'),
+  1055→  ('CUSTOMER', 'own_orders', 'cancel'),
+  1056→  ('CUSTOMER', 'own_wallet', 'view'),
+  1057→  ('CUSTOMER', 'own_referrals', 'view'),
+  1058→  ('CUSTOMER', 'own_notifications', 'view'),
+  1059→  ('CUSTOMER', 'own_support', 'view'),
+  1060→  ('CUSTOMER', 'own_support', 'create'),
+  1061→
+  1062→  -- AGENT
+  1063→  ('AGENT', 'own_profile', 'view'),
+  1064→  ('AGENT', 'own_profile', 'update'),
+  1065→  ('AGENT', 'available_orders', 'view'),
+  1066→  ('AGENT', 'available_orders', 'claim'),
+  1067→  ('AGENT', 'own_orders', 'view'),
+  1068→  ('AGENT', 'own_orders', 'submit_payment'),
+  1069→  ('AGENT', 'own_wallet', 'view'),
+  1070→  ('AGENT', 'own_withdrawals', 'view'),
+  1071→  ('AGENT', 'own_withdrawals', 'create'),
+  1072→  ('AGENT', 'own_referrals', 'view'),
+  1073→  ('AGENT', 'own_earnings', 'view'),
+  1074→  ('AGENT', 'own_performance', 'view'),
+  1075→
+  1076→  -- DEPOSIT_REVIEWER
+  1077→  ('DEPOSIT_REVIEWER', 'deposits', 'view'),
+  1078→  ('DEPOSIT_REVIEWER', 'deposits', 'approve'),
+  1079→  ('DEPOSIT_REVIEWER', 'deposits', 'reject'),
+  1080→  ('DEPOSIT_REVIEWER', 'deposits', 'escalate'),
+  1081→  ('DEPOSIT_REVIEWER', 'users', 'view'),
+  1082→
+  1083→  -- PAYMENT_REVIEWER
+  1084→  ('PAYMENT_REVIEWER', 'payments', 'view'),
+  1085→  ('PAYMENT_REVIEWER', 'payments', 'approve'),
+  1086→  ('PAYMENT_REVIEWER', 'payments', 'reject'),
+  1087→  ('PAYMENT_REVIEWER', 'payments', 'dispute'),
+  1088→  ('PAYMENT_REVIEWER', 'agents', 'view'),
+  1089→  ('PAYMENT_REVIEWER', 'users', 'view'),
+  1090→
+  1091→  -- OPERATIONS_MANAGER
+  1092→  ('OPERATIONS_MANAGER', 'deposits', 'view'),
+  1093→  ('OPERATIONS_MANAGER', 'deposits', 'approve'),
+  1094→  ('OPERATIONS_MANAGER', 'deposits', 'reject'),
+  1095→  ('OPERATIONS_MANAGER', 'deposits', 'escalate'),
+  1096→  ('OPERATIONS_MANAGER', 'payments', 'view'),
+  1097→  ('OPERATIONS_MANAGER', 'payments', 'approve'),
+  1098→  ('OPERATIONS_MANAGER', 'payments', 'reject'),
+  1099→  ('OPERATIONS_MANAGER', 'payments', 'dispute'),
+  1100→  ('OPERATIONS_MANAGER', 'disputes', 'view'),
+  1101→  ('OPERATIONS_MANAGER', 'disputes', 'manage'),
+  1102→  ('OPERATIONS_MANAGER', 'users', 'view'),
+  1103→  ('OPERATIONS_MANAGER', 'users', 'freeze'),
+  1104→  ('OPERATIONS_MANAGER', 'agents', 'view'),
+  1105→  ('OPERATIONS_MANAGER', 'agents', 'limit'),
+  1106→  ('OPERATIONS_MANAGER', 'risk', 'view'),
+  1107→  ('OPERATIONS_MANAGER', 'support', 'view'),
+  1108→  ('OPERATIONS_MANAGER', 'support', 'manage'),
+  1109→
+  1110→  -- FINANCE_ADMIN
+  1111→  ('FINANCE_ADMIN', 'deposits', 'view'),
+  1112→  ('FINANCE_ADMIN', 'orders', 'view'),
+  1113→  ('FINANCE_ADMIN', 'settlements', 'view'),
+  1114→  ('FINANCE_ADMIN', 'withdrawals', 'view'),
+  1115→  ('FINANCE_ADMIN', 'withdrawals', 'approve'),
+  1116→  ('FINANCE_ADMIN', 'withdrawals', 'reject'),
+  1117→  ('FINANCE_ADMIN', 'commissions', 'view'),
+  1118→  ('FINANCE_ADMIN', 'referral_rewards', 'view'),
+  1119→  ('FINANCE_ADMIN', 'referral_rewards', 'approve'),
+  1120→  ('FINANCE_ADMIN', 'treasury', 'view'),
+  1121→  ('FINANCE_ADMIN', 'reconciliation', 'view'),
+  1122→  ('FINANCE_ADMIN', 'reports', 'view'),
+  1123→  ('FINANCE_ADMIN', 'reports', 'export'),
+  1124→
+  1125→  -- TREASURY_ADMIN
+  1126→  ('TREASURY_ADMIN', 'treasury', 'view'),
+  1127→  ('TREASURY_ADMIN', 'treasury', 'update'),
+  1128→  ('TREASURY_ADMIN', 'reconciliation', 'view'),
+  1129→  ('TREASURY_ADMIN', 'reconciliation', 'manage'),
+  1130→  ('TREASURY_ADMIN', 'withdrawals', 'pay'),
+  1131→  ('TREASURY_ADMIN', 'rates', 'view'),
+  1132→  ('TREASURY_ADMIN', 'rates', 'update'),
+  1133→
+  1134→  -- SUPER_ADMIN (inherits all)
+  1135→  ('SUPER_ADMIN', 'all', 'all'),
+  1136→
+  1137→  -- OWNER (inherits all + emergency)
+  1138→  ('OWNER', 'all', 'all'),
+  1139→  ('OWNER', 'emergency', 'all');
+  1140→```
+  1141→
+  1142→### 7.5 Migration 005 — Wallets
+  1143→
+  1144→```sql
+  1145→-- 005_wallets.sql
+  1146→
+  1147→-- Central treasury wallets (admin-managed)
+  1148→CREATE TABLE treasury_wallets (
+  1149→  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1150→  network         network_type NOT NULL,
+  1151→  token           token_type NOT NULL DEFAULT 'USDT',
+  1152→  public_address  text NOT NULL,
+  1153→  label           text NOT NULL,  -- e.g. "Primary TRON USDT"
+  1154→  is_active       boolean NOT NULL DEFAULT true,
+  1155→  is_deposit_address boolean NOT NULL DEFAULT false,
+  1156→  status          text NOT NULL DEFAULT 'ACTIVE',  -- 'ACTIVE' | 'DEPRECATED' | 'COMPROMISED'
+  1157→  effective_from  timestamptz NOT NULL DEFAULT now(),
+  1158→  effective_to    timestamptz,
+  1159→  changed_by      uuid REFERENCES profiles(id),
+  1160→  notes           text,
+  1161→  created_at      timestamptz NOT NULL DEFAULT now(),
+  1162→  updated_at      timestamptz NOT NULL DEFAULT now(),
+  1163→
+  1164→  UNIQUE(network, public_address)
+  1165→);
+  1166→
+  1167→-- Observed treasury balance (manually updated)
+  1168→CREATE TABLE treasury_balance_snapshots (
+  1169→  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1170→  wallet_id       uuid NOT NULL REFERENCES treasury_wallets(id),
+  1171→  observed_balance numeric(38,18) NOT NULL,
+  1172→  observation_time timestamptz NOT NULL DEFAULT now(),
+  1173→  block_height    bigint,
+  1174→  observed_by     uuid REFERENCES profiles(id),
+  1175→  notes           text,
+  1176→  created_at      timestamptz NOT NULL DEFAULT now()
+  1177→);
+  1178→
+  1179→CREATE INDEX idx_treasury_balance_wallet ON treasury_balance_snapshots(wallet_id, observation_time DESC);
+  1180→```
+  1181→
+  1182→### 7.6 Migration 006 — Ledger
+  1183→
+  1184→```sql
+  1185→-- 006_ledger.sql
+  1186→
+  1187→-- Ledger accounts (one per user, plus platform accounts)
+  1188→CREATE TABLE ledger_accounts (
+  1189→  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1190→  user_id     uuid REFERENCES profiles(id),       -- NULL for platform accounts
+  1191→  account_type text NOT NULL,                      -- 'CUSTOMER_USDT' | 'AGENT_USDT' | 'PLATFORM_REVENUE' | 'PLATFORM_FLOAT'
+  1192→  currency    text NOT NULL DEFAULT 'USDT',
+  1193→  is_platform boolean NOT NULL DEFAULT false,
+  1194→  created_at  timestamptz NOT NULL DEFAULT now(),
+  1195→
+  1196→  UNIQUE(user_id, account_type)
+  1197→);
+  1198→
+  1199→-- Platform accounts (seeded)
+  1200→INSERT INTO ledger_accounts (user_id, account_type, currency, is_platform) VALUES
+  1201→  (NULL, 'PLATFORM_REVENUE', 'USDT', true),
+  1202→  (NULL, 'PLATFORM_FLOAT', 'USDT', true),
+  1203→  (NULL, 'PLATFORM_RESERVES', 'USDT', true);
+  1204→
+  1205→-- Ledger transactions (financial events)
+  1206→CREATE TABLE ledger_transactions (
+  1207→  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1208→  correlation_id  uuid NOT NULL DEFAULT uuid_generate_v4(),
+  1209→  transaction_type ledger_entry_type NOT NULL,
+  1210→  description     text NOT NULL,
+  1211→  reference_type  text,       -- 'DEPOSIT' | 'ORDER' | 'SETTLEMENT' | 'WITHDRAWAL' | 'REFERRAL' | 'ADJUSTMENT'
+  1212→  reference_id    uuid,       -- FK to relevant entity
+  1213→  actor_id        uuid REFERENCES profiles(id),
+  1214→  created_at      timestamptz NOT NULL DEFAULT now(),
+  1215→  metadata        jsonb
+  1216→);
+  1217→
+  1218→CREATE INDEX idx_ledger_transactions_ref ON ledger_transactions(reference_type, reference_id);
+  1219→CREATE INDEX idx_ledger_transactions_actor ON ledger_transactions(actor_id);
+  1220→CREATE INDEX idx_ledger_transactions_correlation ON ledger_transactions(correlation_id);
+  1221→
+  1222→-- Ledger entries (double-entry: every transaction has >= 2 entries)
+  1223→CREATE TABLE ledger_entries (
+  1224→  id                  uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1225→  transaction_id      uuid NOT NULL REFERENCES ledger_transactions(id),
+  1226→  account_id          uuid NOT NULL REFERENCES ledger_accounts(id),
+  1227→  direction           ledger_direction NOT NULL,
+  1228→  amount              numeric(38,18) NOT NULL,
+  1229→  balance_after       numeric(38,18) NOT NULL,  -- running balance at time of entry
+  1230→  currency            text NOT NULL DEFAULT 'USDT',
+  1231→  created_at          timestamptz NOT NULL DEFAULT now(),
+  1232→
+  1233→  CONSTRAINT ledger_entries_amount_positive CHECK (amount > 0)
+  1234→);
+  1235→
+  1236→CREATE INDEX idx_ledger_entries_account ON ledger_entries(account_id, created_at DESC);
+  1237→CREATE INDEX idx_ledger_entries_transaction ON ledger_entries(transaction_id);
+  1238→
+  1239→-- Materialized balance view (updated by trigger)
+  1240→CREATE TABLE account_balances (
+  1241→  account_id      uuid PRIMARY KEY REFERENCES ledger_accounts(id),
+  1242→  available       numeric(38,18) NOT NULL DEFAULT 0,
+  1243→  reserved        numeric(38,18) NOT NULL DEFAULT 0,
+  1244→  pending         numeric(38,18) NOT NULL DEFAULT 0,
+  1245→  total           numeric(38,18) GENERATED ALWAYS AS (available + reserved + pending) STORED,
+  1246→  updated_at      timestamptz NOT NULL DEFAULT now(),
+  1247→
+  1248→  CONSTRAINT balances_available_non_negative CHECK (available >= 0),
+  1249→  CONSTRAINT balances_reserved_non_negative CHECK (reserved >= 0),
+  1250→  CONSTRAINT balances_pending_non_negative CHECK (pending >= 0)
+  1251→);
+  1252→
+  1253→-- Balance update function (called by server-side operations only)
+  1254→CREATE OR REPLACE FUNCTION update_account_balance(
+  1255→  p_account_id uuid,
+  1256→  p_available_delta numeric(38,18),
+  1257→  p_reserved_delta numeric(38,18),
+  1258→  p_pending_delta numeric(38,18)
+  1259→) RETURNS void AS $$
+  1260→BEGIN
+  1261→  INSERT INTO account_balances (account_id, available, reserved, pending)
+  1262→  VALUES (p_account_id, 0, 0, 0)
+  1263→  ON CONFLICT (account_id) DO NOTHING;
+  1264→
+  1265→  UPDATE account_balances SET
+  1266→    available  = available + p_available_delta,
+  1267→    reserved   = reserved  + p_reserved_delta,
+  1268→    pending    = pending   + p_pending_delta,
+  1269→    updated_at = now()
+  1270→  WHERE account_id = p_account_id;
+  1271→
+  1272→  -- Invariant checks
+  1273→  IF (SELECT available FROM account_balances WHERE account_id = p_account_id) < 0 THEN
+  1274→    RAISE EXCEPTION 'Insufficient available balance for account %', p_account_id;
+  1275→  END IF;
+  1276→  IF (SELECT reserved FROM account_balances WHERE account_id = p_account_id) < 0 THEN
+  1277→    RAISE EXCEPTION 'Insufficient reserved balance for account %', p_account_id;
+  1278→  END IF;
+  1279→  IF (SELECT pending FROM account_balances WHERE account_id = p_account_id) < 0 THEN
+  1280→    RAISE EXCEPTION 'Insufficient pending balance for account %', p_account_id;
+  1281→  END IF;
+  1282→END;
+  1283→$$ LANGUAGE plpgsql;
+  1284→```
+  1285→
+  1286→### 7.7 Migration 007 — Deposits
+  1287→
+  1288→```sql
+  1289→-- 007_deposits.sql
+  1290→
+  1291→CREATE TABLE deposits (
+  1292→  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1293→  display_id      text UNIQUE NOT NULL,   -- e.g. "DEP-128821"
+  1294→  user_id         uuid NOT NULL REFERENCES profiles(id),
+  1295→  wallet_id       uuid REFERENCES treasury_wallets(id),
+  1296→  network         network_type NOT NULL,
+  1297→  token           token_type NOT NULL DEFAULT 'USDT',
+  1298→  expected_amount numeric(38,18) NOT NULL,
+  1299→  received_amount numeric(38,18),
+  1300→  tx_hash         text,
+  1301→  from_address    text,
+  1302→  status          deposit_status NOT NULL DEFAULT 'CREATED',
+  1303→  submitted_at    timestamptz,
+  1304→  verified_at     timestamptz,
+  1305→  credited_at     timestamptz,
+  1306→  reviewed_by     uuid REFERENCES profiles(id),
+  1307→  rejection_reason text,
+  1308→  escalation_reason text,
+  1309→  escalated_to    uuid REFERENCES profiles(id),
+  1310→  risk_hold_reason text,
+  1311→  idempotency_key text UNIQUE,
+  1312→  notes           text,
+  1313→  metadata        jsonb,
+  1314→  created_at      timestamptz NOT NULL DEFAULT now(),
+  1315→  updated_at      timestamptz NOT NULL DEFAULT now(),
+  1316→
+  1317→  CONSTRAINT deposits_expected_positive CHECK (expected_amount > 0),
+  1318→  CONSTRAINT deposits_received_positive CHECK (received_amount IS NULL OR received_amount > 0)
+  1319→);
+  1320→
+  1321→-- CRITICAL: prevent double-crediting same TX hash
+  1322→CREATE UNIQUE INDEX idx_deposits_tx_hash_unique
+  1323→  ON deposits(tx_hash)
+  1324→  WHERE tx_hash IS NOT NULL AND status IN ('CREDITED', 'VERIFIED');
+  1325→
+  1326→CREATE INDEX idx_deposits_user_id ON deposits(user_id);
+  1327→CREATE INDEX idx_deposits_status ON deposits(status);
+  1328→CREATE INDEX idx_deposits_created_at ON deposits(created_at DESC);
+  1329→CREATE INDEX idx_deposits_tx_hash ON deposits(tx_hash) WHERE tx_hash IS NOT NULL;
+  1330→
+  1331→-- Auto-generate display_id
+  1332→CREATE SEQUENCE deposit_seq START 100001;
+  1333→
+  1334→CREATE OR REPLACE FUNCTION generate_deposit_display_id() RETURNS trigger AS $$
+  1335→BEGIN
+  1336→  NEW.display_id := 'DEP-' || nextval('deposit_seq')::text;
+  1337→  RETURN NEW;
+  1338→END;
+  1339→$$ LANGUAGE plpgsql;
+  1340→
+  1341→CREATE TRIGGER deposits_display_id_trigger
+  1342→  BEFORE INSERT ON deposits
+  1343→  FOR EACH ROW WHEN (NEW.display_id IS NULL)
+  1344→  EXECUTE FUNCTION generate_deposit_display_id();
+  1345→```
+  1346→
+  1347→### 7.8 Migration 008 — Payment Orders
+  1348→
+  1349→```sql
+  1350→-- 008_payment_orders.sql
+  1351→
+  1352→CREATE TABLE payment_orders (
+  1353→  id                    uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1354→  display_id            text UNIQUE NOT NULL,   -- e.g. "ORD-298710"
+  1355→  customer_id           uuid NOT NULL REFERENCES profiles(id),
+  1356→  agent_id              uuid REFERENCES profiles(id),
+  1357→
+  1358→  -- Recipient
+  1359→  recipient_upi_id      text NOT NULL,
+  1360→  recipient_name        text,
+  1361→  recipient_qr_raw      text,         -- raw QR payload
+  1362→  recipient_qr_parsed   jsonb,        -- parsed QR fields
+  1363→
+  1364→  -- Amounts (INR)
+  1365→  inr_amount            numeric(38,2) NOT NULL,
+  1366→  platform_fee_inr      numeric(38,2) NOT NULL DEFAULT 0,
+  1367→  total_inr             numeric(38,2) NOT NULL,
+  1368→
+  1369→  -- Rate snapshot (immutable once set)
+  1370→  customer_rate         numeric(38,8) NOT NULL,  -- INR per USDT at quote time
+  1371→  agent_rate            numeric(38,8) NOT NULL,
+  1372→  commission_rate       numeric(38,4) NOT NULL,  -- percentage, e.g. 1.5000
+  1373→
+  1374→  -- USDT amounts
+  1375→  customer_usdt_debit   numeric(38,18) NOT NULL,
+  1376→  agent_usdt_reimburse  numeric(38,18),
+  1377→  agent_commission_usdt numeric(38,18),
+  1378→  agent_total_usdt      numeric(38,18),
+  1379→  platform_contribution numeric(38,18),
+  1380→
+  1381→  -- Status
+  1382→  status                order_status NOT NULL DEFAULT 'DRAFT',
+  1383→  expires_at            timestamptz,
+  1384→  available_at          timestamptz,
+  1385→  assigned_at           timestamptz,
+  1386→  payment_submitted_at  timestamptz,
+  1387→  completed_at          timestamptz,
+  1388→  cancelled_at          timestamptz,
+  1389→  expired_at            timestamptz,
+  1390→
+  1391→  -- Agent payment proof
+  1392→  agent_payment_ref     text,         -- UTR or reference number
+  1393→  agent_payment_time    timestamptz,
+  1394→  agent_payment_notes   text,
+  1395→  agent_proof_path      text,         -- path in storage
+  1396→
+  1397→  -- Review
+  1398→  reviewed_by           uuid REFERENCES profiles(id),
+  1399→  reviewed_at           timestamptz,
+  1400→  rejection_reason      text,
+  1401→
+  1402→  -- Idempotency
+  1403→  quote_idempotency_key text UNIQUE,
+  1404→  claim_idempotency_key text UNIQUE,
+  1405→
+  1406→  metadata              jsonb,
+  1407→  created_at            timestamptz NOT NULL DEFAULT now(),
+  1408→  updated_at            timestamptz NOT NULL DEFAULT now(),
+  1409→
+  1410→  CONSTRAINT orders_inr_positive CHECK (inr_amount > 0),
+  1411→  CONSTRAINT orders_usdt_positive CHECK (customer_usdt_debit > 0)
+  1412→);
+  1413→
+  1414→-- Prevent duplicate order claim
+  1415→CREATE UNIQUE INDEX idx_orders_agent_active
+  1416→  ON payment_orders(agent_id)
+  1417→  WHERE agent_id IS NOT NULL AND status IN ('ASSIGNED', 'PAYMENT_SUBMITTED', 'MANAGER_REVIEW');
+  1418→
+  1419→-- General indexes
+  1420→CREATE INDEX idx_orders_customer ON payment_orders(customer_id);
+  1421→CREATE INDEX idx_orders_agent ON payment_orders(agent_id);
+  1422→CREATE INDEX idx_orders_status ON payment_orders(status);
+  1423→CREATE INDEX idx_orders_expires ON payment_orders(expires_at) WHERE status = 'AVAILABLE';
+  1424→CREATE INDEX idx_orders_created ON payment_orders(created_at DESC);
+  1425→
+  1426→CREATE SEQUENCE order_seq START 200001;
+  1427→
+  1428→CREATE OR REPLACE FUNCTION generate_order_display_id() RETURNS trigger AS $$
+  1429→BEGIN
+  1430→  NEW.display_id := 'ORD-' || nextval('order_seq')::text;
+  1431→  RETURN NEW;
+  1432→END;
+  1433→$$ LANGUAGE plpgsql;
+  1434→
+  1435→CREATE TRIGGER orders_display_id_trigger
+  1436→  BEFORE INSERT ON payment_orders
+  1437→  FOR EACH ROW WHEN (NEW.display_id IS NULL)
+  1438→  EXECUTE FUNCTION generate_order_display_id();
+  1439→
+  1440→-- Order state transition log
+  1441→CREATE TABLE order_transitions (
+  1442→  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1443→  order_id    uuid NOT NULL REFERENCES payment_orders(id),
+  1444→  from_status order_status,
+  1445→  to_status   order_status NOT NULL,
+  1446→  actor_id    uuid REFERENCES profiles(id),
+  1447→  reason      text,
+  1448→  metadata    jsonb,
+  1449→  created_at  timestamptz NOT NULL DEFAULT now()
+  1450→);
+  1451→
+  1452→CREATE INDEX idx_order_transitions_order ON order_transitions(order_id);
+  1453→```
+  1454→
+  1455→### 7.9 Migration 009 — Agents
+  1456→
+  1457→```sql
+  1458→-- 009_agents.sql
+  1459→
+  1460→CREATE TABLE agent_profiles (
+  1461→  id                    uuid PRIMARY KEY REFERENCES profiles(id),
+  1462→  status                agent_status NOT NULL DEFAULT 'PENDING_ONBOARDING',
+  1463→  display_name          text,
+  1464→
+  1465→  -- Payment channel
+  1466→  upi_id                text,
+  1467→  upi_verified          boolean NOT NULL DEFAULT false,
+  1468→  payment_channel_type  text DEFAULT 'UPI',  -- extensible
+  1469→  payment_channel_notes text,
+  1470→
+  1471→  -- Limits
+  1472→  max_active_orders     int NOT NULL DEFAULT 3,
+  1473→  max_order_size_inr    numeric(38,2) NOT NULL DEFAULT 50000,
+  1474→  daily_volume_limit_inr numeric(38,2) NOT NULL DEFAULT 200000,
+  1475→  commission_tier       text NOT NULL DEFAULT 'STANDARD',  -- 'STANDARD' | 'TRUSTED' | 'PREMIUM'
+  1476→
+  1477→  -- Performance
+  1478→  total_orders          int NOT NULL DEFAULT 0,
+  1479→  successful_orders     int NOT NULL DEFAULT 0,
+  1480→  failed_orders         int NOT NULL DEFAULT 0,
+  1481→  disputed_orders       int NOT NULL DEFAULT 0,
+  1482→  total_inr_paid        numeric(38,2) NOT NULL DEFAULT 0,
+  1483→  total_usdt_earned     numeric(38,18) NOT NULL DEFAULT 0,
+  1484→  reputation_score      numeric(5,2) NOT NULL DEFAULT 100.00,
+  1485→
+  1486→  -- Onboarding
+  1487→  profile_completed     boolean NOT NULL DEFAULT false,
+  1488→  verification_completed boolean NOT NULL DEFAULT false,
+  1489→  training_completed    boolean NOT NULL DEFAULT false,
+  1490→  agreement_signed      boolean NOT NULL DEFAULT false,
+  1491→  agreement_signed_at   timestamptz,
+  1492→  onboarding_completed  boolean NOT NULL DEFAULT false,
+  1493→
+  1494→  -- Risk
+  1495→  risk_level            risk_level NOT NULL DEFAULT 'LOW',
+  1496→  suspension_reason     text,
+  1497→  suspended_at          timestamptz,
+  1498→  suspended_by          uuid REFERENCES profiles(id),
+  1499→  ban_reason            text,
+  1500→  banned_at             timestamptz,
+  1501→  banned_by             uuid REFERENCES profiles(id),
+  1502→
+  1503→  reviewed_by           uuid REFERENCES profiles(id),
+  1504→  reviewed_at           timestamptz,
+  1505→  notes                 text,
+  1506→  metadata              jsonb,
+  1507→  created_at            timestamptz NOT NULL DEFAULT now(),
+  1508→  updated_at            timestamptz NOT NULL DEFAULT now()
+  1509→);
+  1510→
+  1511→-- Agent training progress
+  1512→CREATE TABLE agent_training (
+  1513→  id            uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1514→  agent_id      uuid NOT NULL REFERENCES agent_profiles(id),
+  1515→  module_id     text NOT NULL,
+  1516→  version       text NOT NULL DEFAULT '1.0',
+  1517→  completed_at  timestamptz NOT NULL DEFAULT now(),
+  1518→  acknowledged  boolean NOT NULL DEFAULT false,
+  1519→
+  1520→  UNIQUE(agent_id, module_id, version)
+  1521→);
+  1522→```
+  1523→
+  1524→### 7.10 Migration 010 — Settlements
+  1525→
+  1526→```sql
+  1527→-- 010_settlements.sql
+  1528→
+  1529→CREATE TABLE agent_settlements (
+  1530→  id                  uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1531→  display_id          text UNIQUE NOT NULL,
+  1532→  order_id            uuid UNIQUE NOT NULL REFERENCES payment_orders(id),
+  1533→  agent_id            uuid NOT NULL REFERENCES profiles(id),
+  1534→
+  1535→  inr_paid            numeric(38,2) NOT NULL,
+  1536→  agent_rate          numeric(38,8) NOT NULL,
+  1537→  base_usdt           numeric(38,18) NOT NULL,
+  1538→  commission_rate     numeric(38,4) NOT NULL,
+  1539→  commission_inr      numeric(38,2) NOT NULL,
+  1540→  commission_usdt     numeric(38,18) NOT NULL,
+  1541→  total_usdt          numeric(38,18) NOT NULL,
+  1542→
+  1543→  status              text NOT NULL DEFAULT 'PENDING',  -- 'PENDING' | 'APPROVED' | 'CREDITED' | 'REVERSED'
+  1544→  approved_by         uuid REFERENCES profiles(id),
+  1545→  approved_at         timestamptz,
+  1546→  credited_at         timestamptz,
+  1547→  ledger_transaction_id uuid REFERENCES ledger_transactions(id),
+  1548→
+  1549→  idempotency_key     text UNIQUE,
+  1550→  notes               text,
+  1551→  created_at          timestamptz NOT NULL DEFAULT now(),
+  1552→  updated_at          timestamptz NOT NULL DEFAULT now()
+  1553→);
+  1554→
+  1555→CREATE INDEX idx_settlements_agent ON agent_settlements(agent_id);
+  1556→CREATE INDEX idx_settlements_status ON agent_settlements(status);
+  1557→
+  1558→CREATE SEQUENCE settlement_seq START 300001;
+  1559→
+  1560→CREATE OR REPLACE FUNCTION generate_settlement_display_id() RETURNS trigger AS $$
+  1561→BEGIN
+  1562→  NEW.display_id := 'SET-' || nextval('settlement_seq')::text;
+  1563→  RETURN NEW;
+  1564→END;
+  1565→$$ LANGUAGE plpgsql;
+  1566→
+  1567→CREATE TRIGGER settlements_display_id_trigger
+  1568→  BEFORE INSERT ON agent_settlements
+  1569→  FOR EACH ROW WHEN (NEW.display_id IS NULL)
+  1570→  EXECUTE FUNCTION generate_settlement_display_id();
+  1571→```
+  1572→
+  1573→### 7.11 Migration 011 — Commissions (separate tracking)
+  1574→
+  1575→```sql
+  1576→-- 011_commissions.sql
+  1577→
+  1578→-- Commission is part of settlement but tracked separately for reporting
+  1579→CREATE TABLE commission_records (
+  1580→  id                  uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1581→  settlement_id       uuid UNIQUE NOT NULL REFERENCES agent_settlements(id),
+  1582→  agent_id            uuid NOT NULL REFERENCES profiles(id),
+  1583→  order_id            uuid NOT NULL REFERENCES payment_orders(id),
+  1584→  commission_rate     numeric(38,4) NOT NULL,
+  1585→  commission_inr      numeric(38,2) NOT NULL,
+  1586→  commission_usdt     numeric(38,18) NOT NULL,
+  1587→  status              text NOT NULL DEFAULT 'PENDING',
+  1588→  credited_at         timestamptz,
+  1589→  created_at          timestamptz NOT NULL DEFAULT now()
+  1590→);
+  1591→
+  1592→CREATE INDEX idx_commissions_agent ON commission_records(agent_id);
+  1593→```
+  1594→
+  1595→### 7.12 Migration 012 — Referrals
+  1596→
+  1597→```sql
+  1598→-- 012_referrals.sql
+  1599→
+  1600→CREATE TABLE referral_relationships (
+  1601→  id                uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1602→  referrer_id       uuid NOT NULL REFERENCES profiles(id),
+  1603→  referred_id       uuid UNIQUE NOT NULL REFERENCES profiles(id),  -- one referrer per user
+  1604→  referral_code     text NOT NULL,
+  1605→  relationship_type text NOT NULL DEFAULT 'CUSTOMER',  -- 'CUSTOMER' | 'AGENT'
+  1606→  depth             int NOT NULL DEFAULT 1,
+  1607→  is_qualified      boolean NOT NULL DEFAULT false,
+  1608→  qualified_at      timestamptz,
+  1609→  fraud_flagged     boolean NOT NULL DEFAULT false,
+  1610→  fraud_reason      text,
+  1611→  created_at        timestamptz NOT NULL DEFAULT now(),
+  1612→
+  1613→  CONSTRAINT no_self_referral CHECK (referrer_id != referred_id)
+  1614→);
+  1615→
+  1616→CREATE INDEX idx_referrals_referrer ON referral_relationships(referrer_id);
+  1617→CREATE INDEX idx_referrals_referred ON referral_relationships(referred_id);
+  1618→
+  1619→CREATE TABLE referral_rewards (
+  1620→  id                uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1621→  referrer_id       uuid NOT NULL REFERENCES profiles(id),
+  1622→  referred_id       uuid NOT NULL REFERENCES profiles(id),
+  1623→  relationship_id   uuid NOT NULL REFERENCES referral_relationships(id),
+  1624→  reward_type       text NOT NULL,   -- 'SIGNUP' | 'FIRST_ORDER' | 'VOLUME' | 'AGENT_PARTNER'
+  1625→  trigger_event_id  uuid,            -- order_id or deposit_id that triggered
+  1626→  reward_usdt       numeric(38,18) NOT NULL,
+  1627→  status            text NOT NULL DEFAULT 'PENDING',  -- 'PENDING' | 'APPROVED' | 'CREDITED' | 'REVERSED' | 'REJECTED'
+  1628→  approved_by       uuid REFERENCES profiles(id),
+  1629→  approved_at       timestamptz,
+  1630→  credited_at       timestamptz,
+  1631→  rejection_reason  text,
+  1632→  fraud_flagged     boolean NOT NULL DEFAULT false,
+  1633→  ledger_tx_id      uuid REFERENCES ledger_transactions(id),
+  1634→  idempotency_key   text UNIQUE,
+  1635→  notes             text,
+  1636→  created_at        timestamptz NOT NULL DEFAULT now()
+  1637→);
+  1638→
+  1639→CREATE INDEX idx_referral_rewards_referrer ON referral_rewards(referrer_id);
+  1640→CREATE INDEX idx_referral_rewards_status ON referral_rewards(status);
+  1641→```
+  1642→
+  1643→### 7.13 Migration 013 — Notifications
+  1644→
+  1645→```sql
+  1646→-- 013_notifications.sql
+  1647→
+  1648→CREATE TABLE notification_templates (
+  1649→  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1650→  event_key   text UNIQUE NOT NULL,
+  1651→  title_template text NOT NULL,
+  1652→  body_template  text NOT NULL,
+  1653→  telegram_template text,
+  1654→  email_template text,
+  1655→  channels    notification_channel[] NOT NULL DEFAULT '{IN_APP}',
+  1656→  is_active   boolean NOT NULL DEFAULT true,
+  1657→  created_at  timestamptz NOT NULL DEFAULT now(),
+  1658→  updated_at  timestamptz NOT NULL DEFAULT now()
+  1659→);
+  1660→
+  1661→CREATE TABLE notifications (
+  1662→  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1663→  user_id     uuid NOT NULL REFERENCES profiles(id),
+  1664→  type        notification_type NOT NULL,
+  1665→  event_key   text,
+  1666→  title       text NOT NULL,
+  1667→  body        text NOT NULL,
+  1668→  route       text,           -- deep link
+  1669→  is_read     boolean NOT NULL DEFAULT false,
+  1670→  read_at     timestamptz,
+  1671→  channel     notification_channel NOT NULL DEFAULT 'IN_APP',
+  1672→  delivery_status text,       -- 'PENDING' | 'SENT' | 'FAILED'
+  1673→  delivered_at timestamptz,
+  1674→  metadata    jsonb,
+  1675→  created_at  timestamptz NOT NULL DEFAULT now()
+  1676→);
+  1677→
+  1678→CREATE INDEX idx_notifications_user ON notifications(user_id, created_at DESC);
+  1679→CREATE INDEX idx_notifications_unread ON notifications(user_id) WHERE NOT is_read;
+  1680→```
+  1681→
+  1682→### 7.14 Migration 014 — Telegram
+  1683→
+  1684→```sql
+  1685→-- 014_telegram.sql
+  1686→
+  1687→CREATE TABLE telegram_link_tokens (
+  1688→  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1689→  user_id     uuid UNIQUE NOT NULL REFERENCES profiles(id),
+  1690→  token       text UNIQUE NOT NULL,     -- one-time token
+  1691→  expires_at  timestamptz NOT NULL,
+  1692→  used_at     timestamptz,
+  1693→  created_at  timestamptz NOT NULL DEFAULT now()
+  1694→);
+  1695→
+  1696→CREATE TABLE telegram_messages (
+  1697→  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1698→  user_id         uuid REFERENCES profiles(id),
+  1699→  telegram_chat_id bigint NOT NULL,
+  1700→  direction       text NOT NULL,   -- 'OUTBOUND' | 'INBOUND'
+  1701→  message_text    text,
+  1702→  telegram_msg_id bigint,
+  1703→  update_id       bigint UNIQUE,   -- Telegram update_id for deduplication
+  1704→  event_key       text,
+  1705→  status          text NOT NULL DEFAULT 'PENDING',
+  1706→  sent_at         timestamptz,
+  1707→  error           text,
+  1708→  metadata        jsonb,
+  1709→  created_at      timestamptz NOT NULL DEFAULT now()
+  1710→);
+  1711→
+  1712→CREATE INDEX idx_telegram_messages_user ON telegram_messages(user_id);
+  1713→CREATE INDEX idx_telegram_messages_chat ON telegram_messages(telegram_chat_id);
+  1714→```
+  1715→
+  1716→### 7.15 Migration 015 — Support
+  1717→
+  1718→```sql
+  1719→-- 015_support.sql
+  1720→
+  1721→CREATE TABLE support_tickets (
+  1722→  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1723→  display_id      text UNIQUE NOT NULL,   -- e.g. "TKT-500123"
+  1724→  user_id         uuid NOT NULL REFERENCES profiles(id),
+  1725→  assigned_to     uuid REFERENCES profiles(id),
+  1726→  category        text NOT NULL,   -- 'DEPOSIT' | 'ORDER' | 'PAYMENT' | 'WITHDRAWAL' | 'ACCOUNT' | 'OTHER'
+  1727→  subject         text NOT NULL,
+  1728→  status          support_status NOT NULL DEFAULT 'OPEN',
+  1729→  priority        ticket_priority NOT NULL DEFAULT 'NORMAL',
+  1730→  entity_type     text,            -- related entity type
+  1731→  entity_id       uuid,            -- related entity id
+  1732→  resolved_at     timestamptz,
+  1733→  closed_at       timestamptz,
+  1734→  metadata        jsonb,
+  1735→  created_at      timestamptz NOT NULL DEFAULT now(),
+  1736→  updated_at      timestamptz NOT NULL DEFAULT now()
+  1737→);
+  1738→
+  1739→CREATE SEQUENCE ticket_seq START 500001;
+  1740→
+  1741→CREATE OR REPLACE FUNCTION generate_ticket_display_id() RETURNS trigger AS $$
+  1742→BEGIN
+  1743→  NEW.display_id := 'TKT-' || nextval('ticket_seq')::text;
+  1744→  RETURN NEW;
+  1745→END;
+  1746→$$ LANGUAGE plpgsql;
+  1747→
+  1748→CREATE TRIGGER tickets_display_id_trigger
+  1749→  BEFORE INSERT ON support_tickets
+  1750→  FOR EACH ROW WHEN (NEW.display_id IS NULL)
+  1751→  EXECUTE FUNCTION generate_ticket_display_id();
+  1752→
+  1753→CREATE TABLE ticket_messages (
+  1754→  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1755→  ticket_id   uuid NOT NULL REFERENCES support_tickets(id),
+  1756→  author_id   uuid NOT NULL REFERENCES profiles(id),
+  1757→  body        text NOT NULL,
+  1758→  is_internal boolean NOT NULL DEFAULT false,   -- internal notes
+  1759→  attachments text[],                           -- storage paths
+  1760→  created_at  timestamptz NOT NULL DEFAULT now()
+  1761→);
+  1762→
+  1763→CREATE INDEX idx_ticket_messages_ticket ON ticket_messages(ticket_id);
+  1764→CREATE INDEX idx_support_tickets_user ON support_tickets(user_id);
+  1765→CREATE INDEX idx_support_tickets_status ON support_tickets(status);
+  1766→```
+  1767→
+  1768→### 7.16 Migration 016 — Disputes
+  1769→
+  1770→```sql
+  1771→-- 016_disputes.sql
+  1772→
+  1773→CREATE TABLE disputes (
+  1774→  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1775→  display_id      text UNIQUE NOT NULL,
+  1776→  order_id        uuid UNIQUE NOT NULL REFERENCES payment_orders(id),
+  1777→  raised_by       uuid NOT NULL REFERENCES profiles(id),
+  1778→  assigned_to     uuid REFERENCES profiles(id),
+  1779→  status          dispute_status NOT NULL DEFAULT 'OPEN',
+  1780→  reason          text NOT NULL,
+  1781→  resolution      text,
+  1782→  resolution_type text,  -- 'REFUNDED' | 'SETTLED_AS_IS' | 'PARTIAL_REFUND' | 'NO_ACTION'
+  1783→  ledger_impact   jsonb,
+  1784→  resolved_at     timestamptz,
+  1785→  created_at      timestamptz NOT NULL DEFAULT now(),
+  1786→  updated_at      timestamptz NOT NULL DEFAULT now()
+  1787→);
+  1788→
+  1789→CREATE TABLE dispute_messages (
+  1790→  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1791→  dispute_id  uuid NOT NULL REFERENCES disputes(id),
+  1792→  author_id   uuid NOT NULL REFERENCES profiles(id),
+  1793→  body        text NOT NULL,
+  1794→  is_internal boolean NOT NULL DEFAULT false,
+  1795→  attachments text[],
+  1796→  created_at  timestamptz NOT NULL DEFAULT now()
+  1797→);
+  1798→
+  1799→CREATE SEQUENCE dispute_seq START 600001;
+  1800→
+  1801→CREATE OR REPLACE FUNCTION generate_dispute_display_id() RETURNS trigger AS $$
+  1802→BEGIN
+  1803→  NEW.display_id := 'DSP-' || nextval('dispute_seq')::text;
+  1804→  RETURN NEW;
+  1805→END;
+  1806→$$ LANGUAGE plpgsql;
+  1807→
+  1808→CREATE TRIGGER disputes_display_id_trigger
+  1809→  BEFORE INSERT ON disputes
+  1810→  FOR EACH ROW WHEN (NEW.display_id IS NULL)
+  1811→  EXECUTE FUNCTION generate_dispute_display_id();
+  1812→```
+  1813→
+  1814→### 7.17 Migration 017 — Risk
+  1815→
+  1816→```sql
+  1817→-- 017_risk.sql
+  1818→
+  1819→CREATE TABLE risk_events (
+  1820→  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1821→  user_id     uuid REFERENCES profiles(id),
+  1822→  entity_type text,    -- 'USER' | 'DEPOSIT' | 'ORDER' | 'WITHDRAWAL' | 'AGENT'
+  1823→  entity_id   uuid,
+  1824→  flag        risk_flag NOT NULL,
+  1825→  level       risk_level NOT NULL DEFAULT 'MEDIUM',
+  1826→  description text,
+  1827→  auto_detected boolean NOT NULL DEFAULT false,
+  1828→  reviewed    boolean NOT NULL DEFAULT false,
+  1829→  reviewed_by uuid REFERENCES profiles(id),
+  1830→  reviewed_at timestamptz,
+  1831→  resolution  text,
+  1832→  metadata    jsonb,
+  1833→  created_at  timestamptz NOT NULL DEFAULT now()
+  1834→);
+  1835→
+  1836→CREATE INDEX idx_risk_events_user ON risk_events(user_id);
+  1837→CREATE INDEX idx_risk_events_entity ON risk_events(entity_type, entity_id);
+  1838→CREATE INDEX idx_risk_events_unreviewed ON risk_events(created_at DESC) WHERE NOT reviewed;
+  1839→```
+  1840→
+  1841→### 7.18 Migration 018 — Audit
+  1842→
+  1843→```sql
+  1844→-- 018_audit.sql
+  1845→
+  1846→CREATE TABLE audit_log (
+  1847→  id            uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1848→  actor_id      uuid REFERENCES profiles(id),
+  1849→  actor_role    user_role,
+  1850→  action        text NOT NULL,      -- e.g. 'DEPOSIT_APPROVED'
+  1851→  entity_type   text,
+  1852→  entity_id     uuid,
+  1853→  before_state  jsonb,
+  1854→  after_state   jsonb,
+  1855→  reason        text,
+  1856→  ip_address    inet,
+  1857→  user_agent    text,
+  1858→  request_id    text,
+  1859→  correlation_id uuid,
+  1860→  metadata      jsonb,
+  1861→  created_at    timestamptz NOT NULL DEFAULT now()
+  1862→);
+  1863→
+  1864→CREATE INDEX idx_audit_actor ON audit_log(actor_id);
+  1865→CREATE INDEX idx_audit_entity ON audit_log(entity_type, entity_id);
+  1866→CREATE INDEX idx_audit_action ON audit_log(action);
+  1867→CREATE INDEX idx_audit_created ON audit_log(created_at DESC);
+  1868→
+  1869→-- Audit log is append-only; no UPDATE or DELETE allowed via RLS
+  1870→```
+  1871→
+  1872→### 7.19 Migration 019 — Settings
+  1873→
+  1874→```sql
+  1875→-- 019_settings.sql
+  1876→
+  1877→CREATE TABLE app_settings (
+  1878→  key           text PRIMARY KEY,
+  1879→  value         jsonb NOT NULL,
+  1880→  description   text,
+  1881→  category      text NOT NULL DEFAULT 'GENERAL',
+  1882→  is_sensitive  boolean NOT NULL DEFAULT false,
+  1883→  changed_by    uuid REFERENCES profiles(id),
+  1884→  changed_at    timestamptz NOT NULL DEFAULT now(),
+  1885→  previous_value jsonb,
+  1886→  requires_approval boolean NOT NULL DEFAULT false,
+  1887→  approved_by   uuid REFERENCES profiles(id),
+  1888→  approved_at   timestamptz
+  1889→);
+  1890→
+  1891→-- Default settings
+  1892→INSERT INTO app_settings (key, value, description, category) VALUES
+  1893→  ('customer_quote_rate', '91.50', 'INR per USDT charged to customer', 'RATES'),
+  1894→  ('agent_settlement_rate', '91.00', 'INR per USDT paid to agent', 'RATES'),
+  1895→  ('standard_commission_rate', '1.50', 'Standard agent commission %', 'COMMISSION'),
+  1896→  ('trusted_commission_rate', '1.75', 'Trusted agent commission %', 'COMMISSION'),
+  1897→  ('premium_commission_rate', '2.00', 'Premium agent commission %', 'COMMISSION'),
+  1898→  ('platform_fee_percent', '0.00', 'Customer platform fee %', 'FEES'),
+  1899→  ('platform_fee_flat_inr', '0.00', 'Customer flat fee INR', 'FEES'),
+  1900→  ('min_deposit_usdt', '10.00', 'Minimum deposit amount USDT', 'LIMITS'),
+  1901→  ('max_deposit_usdt', '10000.00', 'Maximum deposit amount USDT', 'LIMITS'),
+  1902→  ('min_order_inr', '100.00', 'Minimum order INR', 'LIMITS'),
+  1903→  ('max_order_inr', '50000.00', 'Maximum order INR', 'LIMITS'),
+  1904→  ('order_expiry_minutes', '10', 'Order expiry in minutes', 'TIMERS'),
+  1905→  ('max_agent_active_orders', '3', 'Default max active orders per agent', 'AGENT'),
+  1906→  ('deposits_paused', 'false', 'Emergency: pause all deposits', 'EMERGENCY'),
+  1907→  ('orders_paused', 'false', 'Emergency: pause new orders', 'EMERGENCY'),
+  1908→  ('agent_claims_paused', 'false', 'Emergency: pause agent claims', 'EMERGENCY'),
+  1909→  ('withdrawals_paused', 'false', 'Emergency: pause withdrawals', 'EMERGENCY'),
+  1910→  ('settlements_paused', 'false', 'Emergency: pause settlements', 'EMERGENCY'),
+  1911→  ('global_maintenance', 'false', 'Global maintenance mode', 'MAINTENANCE'),
+  1912→  ('customer_maintenance', 'false', 'Customer app maintenance mode', 'MAINTENANCE'),
+  1913→  ('agent_maintenance', 'false', 'Agent app maintenance mode', 'MAINTENANCE'),
+  1914→  ('telegram_enabled', 'true', 'Enable Telegram notifications', 'TELEGRAM'),
+  1915→  ('referrals_enabled', 'true', 'Enable referral system', 'FEATURES'),
+  1916→  ('customer_referral_reward_usdt', '1.00', 'Customer referral reward USDT', 'REFERRALS'),
+  1917→  ('agent_partner_reward_percent', '5.00', 'Agent partner reward % of commission', 'REFERRALS'),
+  1918→  ('usdt_network_primary', '"TRON"', 'Primary USDT deposit network', 'WALLETS'),
+  1919→  ('central_usdt_tron_address', '""', 'Central TRON USDT deposit address', 'WALLETS');
+  1920→
+  1921→-- Setting history
+  1922→CREATE TABLE setting_history (
+  1923→  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  1924→  key         text NOT NULL,
+  1925→  old_value   jsonb,
+  1926→  new_value   jsonb NOT NULL,
+  1927→  changed_by  uuid REFERENCES profiles(id),
+  1928→  reason      text,
+  1929→  created_at  timestamptz NOT NULL DEFAULT now()
+  1930→);
+  1931→
+  1932→CREATE TABLE feature_flags (
+  1933→  key         text PRIMARY KEY,
+  1934→  enabled     boolean NOT NULL DEFAULT false,
+  1935→  description text,
+  1936→  environments text[] DEFAULT '{development}',  -- environments where enabled
+  1937→  changed_by  uuid REFERENCES profiles(id),
+  1938→  changed_at  timestamptz NOT NULL DEFAULT now()
+  1939→);
+  1940→
+  1941→INSERT INTO feature_flags (key, description, enabled, environments) VALUES
+  1942→  ('payment_feature', 'Customer INR payment orders', true, '{development,production}'),
+  1943→  ('agent_marketplace', 'Agent order marketplace', true, '{development,production}'),
+  1944→  ('referrals', 'Referral system', true, '{development,production}'),
+  1945→  ('telegram_notifications', 'Telegram bot notifications', false, '{development}'),
+  1946→  ('demo_mode', 'Demo/simulation mode', true, '{development}');
+  1947→```
+  1948→
+  1949→### 7.20 Migration 020 — Reporting Views
+  1950→
+  1951→```sql
+  1952→-- 020_reporting.sql
+  1953→
+  1954→CREATE VIEW v_platform_metrics AS
+  1955→SELECT
+  1956→  (SELECT COUNT(*) FROM profiles WHERE role = 'CUSTOMER') as total_customers,
+  1957→  (SELECT COUNT(*) FROM profiles WHERE role = 'CUSTOMER' AND kyc_status = 'APPROVED') as kyc_customers,
+  1958→  (SELECT COUNT(*) FROM agent_profiles WHERE status = 'ACTIVE') as active_agents,
+  1959→  (SELECT COUNT(*) FROM deposits WHERE status = 'CREDITED') as total_deposits,
+  1960→  (SELECT COALESCE(SUM(received_amount), 0) FROM deposits WHERE status = 'CREDITED') as total_usdt_deposited,
+  1961→  (SELECT COUNT(*) FROM payment_orders WHERE status = 'COMPLETED') as total_orders_completed,
+  1962→  (SELECT COALESCE(SUM(inr_amount), 0) FROM payment_orders WHERE status = 'COMPLETED') as total_inr_volume,
+  1963→  (SELECT COALESCE(SUM(platform_contribution), 0) FROM payment_orders WHERE status = 'COMPLETED') as total_platform_contribution;
+  1964→
+  1965→CREATE VIEW v_customer_balances AS
+  1966→SELECT
+  1967→  p.id as user_id,
+  1968→  p.email,
+  1969→  p.full_name,
+  1970→  COALESCE(ab.available, 0) as available_usdt,
+  1971→  COALESCE(ab.reserved, 0) as reserved_usdt,
+  1972→  COALESCE(ab.pending, 0) as pending_usdt,
+  1973→  COALESCE(ab.total, 0) as total_usdt
+  1974→FROM profiles p
+  1975→LEFT JOIN ledger_accounts la ON la.user_id = p.id AND la.account_type = 'CUSTOMER_USDT'
+  1976→LEFT JOIN account_balances ab ON ab.account_id = la.id
+  1977→WHERE p.role = 'CUSTOMER';
+  1978→
+  1979→CREATE VIEW v_agent_balances AS
+  1980→SELECT
+  1981→  p.id as user_id,
+  1982→  p.email,
+  1983→  ap.commission_tier,
+  1984→  COALESCE(ab.available, 0) as available_usdt,
+  1985→  COALESCE(ab.pending, 0) as pending_usdt,
+  1986→  ap.total_usdt_earned
+  1987→FROM profiles p
+  1988→JOIN agent_profiles ap ON ap.id = p.id
+  1989→LEFT JOIN ledger_accounts la ON la.user_id = p.id AND la.account_type = 'AGENT_USDT'
+  1990→LEFT JOIN account_balances ab ON ab.account_id = la.id;
+  1991→```
+  1992→
+  1993→### 7.21 RLS Policies
+  1994→
+  1995→```sql
+  1996→-- RLS for profiles
+  1997→ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+  1998→
+  1999→-- Users can view their own profile
+  2000→CREATE POLICY "profiles_own_view" ON profiles
+
+[showing lines 1-2000 of 5758; use offset=2001 with limit to continue reading]

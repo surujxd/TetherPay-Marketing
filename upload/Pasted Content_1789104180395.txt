@@ -1,0 +1,5758 @@
+# TetherPay — Master Repository Specification & Production PRD
+
+> **Version:** 1.0.0  
+> **Date:** 2025-06-01  
+> **Status:** AUTHORITATIVE — Single Source of Truth  
+> **Domain:** tetherpay.fun  
+> **Support:** support@tetherpay.fun
+
+---
+
+## ⚠️ Critical Notices
+
+> **BRAND/TRADEMARK NOTICE:** The name "TetherPay" incorporates the word "Tether," which is associated with Tether Operations Limited (issuer of USDT). Trademark clearance from qualified IP counsel is **required** before any public launch. Do not use Tether's existing logo, visual identity, or trade dress. The product identity must be an entirely original wordmark.
+
+> **LEGAL/COMPLIANCE REVIEW REQUIRED:** This document describes technical architecture only. It does not establish legal permission to operate. Before any public-money launch, qualified Indian legal and compliance counsel must review the full operating structure, including VDA custody/administration, VDA-to-fiat activity, UPI/payment workflows, AML/KYC obligations, FIU registration, TDS and taxation implications, and applicable data-protection regulations (DPDPA 2023). No RBI authorization, FIU registration, banking partnerships, or regulatory approvals are claimed or implied herein.
+
+---
+
+## Table of Contents
+
+1. [Project Identity](#1-project-identity)
+2. [Assumptions & Decisions](#2-assumptions--decisions)
+3. [Business Model](#3-business-model)
+4. [Technology Stack](#4-technology-stack)
+5. [Repository Structure](#5-repository-structure)
+6. [Design System](#6-design-system)
+7. [Database Architecture](#7-database-architecture)
+8. [Authentication & RBAC](#8-authentication--rbac)
+9. [Ledger & Financial Model](#9-ledger--financial-model)
+10. [State Machines](#10-state-machines)
+11. [Financial Formulas](#11-financial-formulas)
+12. [API Contracts](#12-api-contracts)
+13. [Public Website Specification](#13-public-website-specification)
+14. [Customer App Specification](#14-customer-app-specification)
+15. [Agent App Specification](#15-agent-app-specification)
+16. [Manager Portal Specification](#16-manager-portal-specification)
+17. [Admin Portal Specification](#17-admin-portal-specification)
+18. [Telegram Integration](#18-telegram-integration)
+19. [Notifications & Realtime](#19-notifications--realtime)
+20. [Referral System](#20-referral-system)
+21. [Support & Dispute System](#21-support--dispute-system)
+22. [Risk & Compliance](#22-risk--compliance)
+23. [Treasury & Reconciliation](#23-treasury--reconciliation)
+24. [Rate, Fee & Commission Engine](#24-rate-fee--commission-engine)
+25. [Security Architecture](#25-security-architecture)
+26. [Component Library](#26-component-library)
+27. [Deployment & Infrastructure](#27-deployment--infrastructure)
+28. [Local Development](#28-local-development)
+29. [Testing Strategy](#29-testing-strategy)
+30. [Operations Manuals](#30-operations-manuals)
+31. [Legal Documentation](#31-legal-documentation)
+32. [Reporting & Analytics](#32-reporting--analytics)
+33. [AI Coding Guide](#33-ai-coding-guide)
+34. [Production Go-Live Checklist](#34-production-go-live-checklist)
+35. [Traceability Matrix](#35-traceability-matrix)
+36. [Development Order](#36-development-order)
+
+---
+
+## 1. Project Identity
+
+| Property | Value |
+|---|---|
+| Product name | TetherPay |
+| Primary domain | tetherpay.fun |
+| Customer app | app.tetherpay.fun |
+| Agent app | agent.tetherpay.fun |
+| Manager portal | ops.tetherpay.fun |
+| Admin portal | admin.tetherpay.fun |
+| Notification backend | notifications.tetherpay.fun |
+| Support email | support@tetherpay.fun |
+| Primary positioning | Earn in USDT. Spend in INR. |
+
+### Approved Marketing Copy
+
+**Primary:** Earn in USDT. Spend in INR.  
+**Secondary:** Deposit USDT, create an INR payment order, and have the payment fulfilled through TetherPay's verified settlement network.  
+**Agent:** Provide INR liquidity. Receive USDT settlement and earn commission.
+
+### Prohibited Claims
+
+The following claims must **never** appear in any product copy, UI, or communications:
+- "Guaranteed payments"
+- "Zero risk"
+- "Anonymous"
+- "Bank-account protection"
+- "Guaranteed profits" or "guaranteed earnings"
+- "RBI approved" / "FIU registered" / "SEBI authorized" (unless actually established)
+- Any claim of regulatory license not actually held
+
+---
+
+## 2. Assumptions & Decisions
+
+| # | Decision | Rationale |
+|---|---|---|
+| A1 | Single Next.js monorepo with role-based routing | Faster to build, separable later |
+| A2 | pnpm as package manager | Faster installs, better workspace support |
+| A3 | Node.js 20 LTS | Stable, supported, matches Netlify defaults |
+| A4 | Supabase Auth for all authentication | Reduces external service dependencies |
+| A5 | Central USDT wallet model (not per-user wallet) | Matches stated business requirement |
+| A6 | Manual payment verification first (no automated chain monitoring) | Matches stated business model |
+| A7 | PostgreSQL numeric(38,18) for all financial amounts | Safe decimal precision |
+| A8 | HALF_UP rounding on displayed/settled amounts | Standard financial rounding |
+| A9 | Supabase Realtime via PostgreSQL replication | Free tier compatible |
+| A10 | Telegram as notification-only, not authorization | Security boundary |
+| A11 | TRON (TRC-20) as primary USDT network | Lowest fees for USDT transfers; others configurable |
+| A12 | UPI as sole INR payment method | Matches stated product scope |
+| A13 | 1-level referral depth for financial rewards | Anti-MLM requirement |
+| A14 | Orders expire after 10 minutes (configurable) | Backend-controlled, configurable |
+| A15 | All sensitive files in Supabase private buckets | Security requirement |
+| A16 | No direct balance field mutations from frontend | Ledger-only financial state |
+
+---
+
+## 3. Business Model
+
+### 3.1 Operational Flow
+
+```
+CUSTOMER
+    │
+    │  deposits USDT to central wallet
+    ▼
+CENTRAL TETHERPAY USDT WALLET
+    │
+    │  manager manually verifies on-chain
+    ▼
+CUSTOMER INTERNAL USDT LEDGER (credited)
+    │
+    │  customer creates INR payment order
+    │  (USDT reserved from available balance)
+    ▼
+PAYMENT ORDER MARKETPLACE (AVAILABLE state)
+    │
+    │  agent views and claims order
+    ▼
+AGENT
+    │
+    │  agent pays recipient via own UPI channel
+    │  (agent uses personal INR funds)
+    ▼
+UPI RECIPIENT (payment received in INR)
+    │
+    │  agent submits: UTR / reference / screenshot
+    ▼
+MANAGER
+    │
+    │  manually verifies payment
+    ▼
+    ├── REJECTED → order re-enters marketplace or refunded
+    └── APPROVED
+           │
+           ▼
+    AGENT USDT SETTLEMENT
+    (reimbursement + commission credited to agent wallet)
+           │
+           │  agent requests USDT payout
+           ▼
+    ADMIN/TREASURY
+    (manual USDT transfer to agent's external wallet)
+```
+
+### 3.2 Revenue Model
+
+```
+Customer pays:   INR amount + platform fee (converted to USDT debit)
+Agent receives:  USDT equivalent of INR paid + commission
+Platform earns:  Spread between customer rate and agent rate + fees - commissions
+```
+
+### 3.3 Central Wallet Model
+
+```
+Customer A ─┐
+Customer B ─┼──▶ Central TetherPay USDT Wallet (single address per network)
+Customer C ─┘
+```
+
+- Customers send USDT to the **central wallet address**.
+- Customers submit a deposit request with TX hash.
+- Managers verify on-chain and approve/reject.
+- The application's internal ledger is the source of truth for individual balances.
+
+---
+
+## 4. Technology Stack
+
+### 4.1 Core Stack
+
+| Layer | Technology | Version |
+|---|---|---|
+| Framework | Next.js (App Router) | 14.x |
+| Language | TypeScript | 5.x |
+| Styling | Tailwind CSS | 3.x |
+| UI components | Custom + Radix UI primitives | latest |
+| Icons | Lucide React | latest |
+| Database | Supabase (PostgreSQL 15) | latest |
+| Auth | Supabase Auth | latest |
+| Realtime | Supabase Realtime | latest |
+| Storage | Supabase Storage | latest |
+| Hosting | Netlify | — |
+| CDN/DNS | Cloudflare | — |
+| Repository | GitHub | — |
+| Notifications | Telegram Bot API | — |
+| Package manager | pnpm | 8.x |
+| Node version | 20 LTS | 20.x |
+
+### 4.2 Key Libraries
+
+```json
+{
+  "dependencies": {
+    "next": "14.x",
+    "react": "18.x",
+    "react-dom": "18.x",
+    "@supabase/supabase-js": "2.x",
+    "@supabase/ssr": "0.x",
+    "decimal.js": "10.x",
+    "zod": "3.x",
+    "date-fns": "3.x",
+    "react-hook-form": "7.x",
+    "@hookform/resolvers": "3.x",
+    "lucide-react": "latest",
+    "@radix-ui/react-dialog": "latest",
+    "@radix-ui/react-dropdown-menu": "latest",
+    "@radix-ui/react-tabs": "latest",
+    "@radix-ui/react-toast": "latest",
+    "@radix-ui/react-tooltip": "latest",
+    "@radix-ui/react-switch": "latest",
+    "@radix-ui/react-select": "latest",
+    "@radix-ui/react-sheet": "latest",
+    "clsx": "latest",
+    "tailwind-merge": "latest",
+    "class-variance-authority": "latest",
+    "sonner": "latest",
+    "qr-scanner": "latest",
+    "nanoid": "latest",
+    "jose": "latest"
+  },
+  "devDependencies": {
+    "typescript": "5.x",
+    "@types/node": "20.x",
+    "@types/react": "18.x",
+    "tailwindcss": "3.x",
+    "postcss": "latest",
+    "autoprefixer": "latest",
+    "eslint": "8.x",
+    "prettier": "3.x",
+    "vitest": "1.x",
+    "@testing-library/react": "14.x",
+    "@playwright/test": "latest",
+    "supabase": "latest"
+  }
+}
+```
+
+### 4.3 Financial Arithmetic
+
+**NEVER use JavaScript native `number` or `float` for financial amounts.**
+
+All financial calculations use `decimal.js`:
+
+```typescript
+import Decimal from 'decimal.js';
+
+Decimal.set({ precision: 38, rounding: Decimal.ROUND_HALF_UP });
+
+// Agent settlement example
+function calculateAgentSettlement(inrPaid: string, agentRate: string, commissionRate: string) {
+  const inr = new Decimal(inrPaid);
+  const rate = new Decimal(agentRate);
+  const commission = new Decimal(commissionRate).div(100);
+
+  const baseUsdt = inr.div(rate);
+  const commissionInr = inr.mul(commission);
+  const commissionUsdt = commissionInr.div(rate);
+  const totalUsdt = baseUsdt.add(commissionUsdt);
+
+  return {
+    baseUsdt: baseUsdt.toFixed(8),
+    commissionInr: commissionInr.toFixed(2),
+    commissionUsdt: commissionUsdt.toFixed(8),
+    totalUsdt: totalUsdt.toFixed(8),
+  };
+}
+```
+
+All amounts stored in PostgreSQL as `numeric(38,18)`.
+
+---
+
+## 5. Repository Structure
+
+```
+tetherpay/
+├── .env.example
+├── .eslintrc.json
+├── .gitignore
+├── .nvmrc                          # "20"
+├── .prettierrc
+├── netlify.toml
+├── package.json
+├── pnpm-lock.yaml
+├── pnpm-workspace.yaml
+├── tsconfig.json
+├── README.md
+│
+├── apps/
+│   └── web/                        # Single Next.js app (all portals)
+│       ├── next.config.ts
+│       ├── tailwind.config.ts
+│       ├── postcss.config.js
+│       ├── public/
+│       │   ├── favicon.ico
+│       │   ├── icons/              # PWA icons
+│       │   ├── images/
+│       │   └── manifest.json
+│       └── src/
+│           ├── app/                # Next.js App Router
+│           │   ├── (public)/       # Public website routes
+│           │   │   ├── page.tsx
+│           │   │   ├── about/
+│           │   │   ├── how-it-works/
+│           │   │   ├── fees/
+│           │   │   ├── security/
+│           │   │   ├── agents/
+│           │   │   ├── referrals/
+│           │   │   ├── faq/
+│           │   │   ├── contact/
+│           │   │   ├── support/
+│           │   │   ├── status/
+│           │   │   ├── login/
+│           │   │   ├── register/
+│           │   │   ├── terms/
+│           │   │   ├── privacy/
+│           │   │   ├── cookies/
+│           │   │   ├── risk-disclosure/
+│           │   │   ├── acceptable-use/
+│           │   │   ├── aml-policy/
+│           │   │   ├── kyc-policy/
+│           │   │   ├── referral-terms/
+│           │   │   ├── agent-terms/
+│           │   │   ├── payment-terms/
+│           │   │   ├── refund-policy/
+│           │   │   ├── complaints/
+│           │   │   └── law-enforcement/
+│           │   ├── (customer)/     # Customer app — requires customer auth
+│           │   │   └── app/
+│           │   │       ├── layout.tsx
+│           │   │       ├── dashboard/
+│           │   │       ├── wallet/
+│           │   │       │   ├── page.tsx
+│           │   │       │   └── deposit/
+│           │   │       │       ├── page.tsx
+│           │   │       │       └── [id]/
+│           │   │       ├── activity/
+│           │   │       │   ├── page.tsx
+│           │   │       │   └── [id]/
+│           │   │       ├── pay/
+│           │   │       │   ├── page.tsx
+│           │   │       │   ├── qr/
+│           │   │       │   ├── manual/
+│           │   │       │   ├── review/
+│           │   │       │   └── success/
+│           │   │       ├── orders/
+│           │   │       │   ├── page.tsx
+│           │   │       │   └── [id]/
+│           │   │       ├── referrals/
+│           │   │       │   ├── page.tsx
+│           │   │       │   └── how-it-works/
+│           │   │       ├── notifications/
+│           │   │       ├── support/
+│           │   │       │   ├── page.tsx
+│           │   │       │   ├── new/
+│           │   │       │   └── [id]/
+│           │   │       ├── profile/
+│           │   │       ├── security/
+│           │   │       ├── settings/
+│           │   │       └── help/
+│           │   ├── (agent)/        # Agent app — requires agent auth
+│           │   │   └── agent/
+│           │   │       ├── layout.tsx
+│           │   │       ├── dashboard/
+│           │   │       ├── onboarding/
+│           │   │       │   ├── profile/
+│           │   │       │   ├── verification/
+│           │   │       │   ├── payment-channel/
+│           │   │       │   ├── agreement/
+│           │   │       │   └── training/
+│           │   │       ├── orders/
+│           │   │       │   ├── page.tsx
+│           │   │       │   ├── [id]/
+│           │   │       │   ├── active/
+│           │   │       │   └── completed/
+│           │   │       ├── wallet/
+│           │   │       │   ├── page.tsx
+│           │   │       │   └── activity/
+│           │   │       ├── withdraw/
+│           │   │       ├── withdrawals/
+│           │   │       ├── partners/
+│           │   │       │   ├── page.tsx
+│           │   │       │   └── [id]/
+│           │   │       ├── referrals/
+│           │   │       ├── earnings/
+│           │   │       ├── performance/
+│           │   │       ├── notifications/
+│           │   │       ├── support/
+│           │   │       ├── security/
+│           │   │       ├── settings/
+│           │   │       └── help/
+│           │   ├── (ops)/          # Manager portal — requires ops auth
+│           │   │   └── ops/
+│           │   │       ├── layout.tsx
+│           │   │       ├── page.tsx
+│           │   │       ├── deposits/
+│           │   │       │   ├── page.tsx
+│           │   │       │   ├── [id]/
+│           │   │       │   └── unmatched/
+│           │   │       ├── payments/
+│           │   │       │   ├── page.tsx
+│           │   │       │   └── [id]/
+│           │   │       ├── disputes/
+│           │   │       │   ├── page.tsx
+│           │   │       │   └── [id]/
+│           │   │       ├── users/
+│           │   │       │   ├── page.tsx
+│           │   │       │   └── [id]/
+│           │   │       ├── agents/
+│           │   │       │   ├── page.tsx
+│           │   │       │   └── [id]/
+│           │   │       ├── risk/
+│           │   │       │   ├── page.tsx
+│           │   │       │   └── [id]/
+│           │   │       ├── support/
+│           │   │       │   ├── page.tsx
+│           │   │       │   └── [id]/
+│           │   │       ├── activity/
+│           │   │       └── profile/
+│           │   ├── (admin)/        # Admin portal — requires admin auth
+│           │   │   └── admin/
+│           │   │       ├── layout.tsx
+│           │   │       ├── page.tsx
+│           │   │       ├── customers/
+│           │   │       │   ├── page.tsx
+│           │   │       │   └── [id]/
+│           │   │       ├── agents/
+│           │   │       │   ├── page.tsx
+│           │   │       │   └── [id]/
+│           │   │       ├── managers/
+│           │   │       │   ├── page.tsx
+│           │   │       │   └── [id]/
+│           │   │       ├── deposits/
+│           │   │       ├── payments/
+│           │   │       ├── settlements/
+│           │   │       ├── withdrawals/
+│           │   │       ├── disputes/
+│           │   │       ├── treasury/
+│           │   │       ├── reconciliation/
+│           │   │       ├── rates/
+│           │   │       ├── fees/
+│           │   │       ├── commissions/
+│           │   │       ├── referrals/
+│           │   │       │   ├── page.tsx
+│           │   │       │   ├── rewards/
+│           │   │       │   ├── fraud/
+│           │   │       │   └── settings/
+│           │   │       ├── risk/
+│           │   │       ├── compliance/
+│           │   │       ├── notifications/
+│           │   │       ├── telegram/
+│           │   │       ├── reports/
+│           │   │       ├── audit/
+│           │   │       ├── settings/
+│           │   │       ├── security/
+│           │   │       └── emergency/
+│           │   └── api/            # Next.js Route Handlers
+│           │       ├── auth/
+│           │       ├── deposits/
+│           │       ├── orders/
+│           │       ├── agent/
+│           │       ├── referrals/
+│           │       ├── telegram/
+│           │       │   └── webhook/
+│           │       ├── notifications/
+│           │       ├── treasury/
+│           │       ├── reports/
+│           │       └── health/
+│           ├── components/
+│           │   ├── ui/             # Base UI components
+│           │   ├── financial/      # Financial display components
+│           │   ├── forms/          # Form components
+│           │   ├── layouts/        # Layout components
+│           │   ├── navigation/     # Nav components
+│           │   └── shared/         # Shared business components
+│           ├── lib/
+│           │   ├── supabase/
+│           │   │   ├── client.ts
+│           │   │   ├── server.ts
+│           │   │   └── admin.ts
+│           │   ├── auth/
+│           │   ├── ledger/
+│           │   ├── financial/
+│           │   │   ├── decimal.ts
+│           │   │   ├── formulas.ts
+│           │   │   └── formatting.ts
+│           │   ├── telegram/
+│           │   ├── notifications/
+│           │   ├── email/
+│           │   ├── risk/
+│           │   ├── audit/
+│           │   └── utils/
+│           ├── hooks/
+│           ├── stores/
+│           ├── types/
+│           └── middleware.ts
+│
+├── supabase/
+│   ├── config.toml
+│   ├── migrations/
+│   │   ├── 001_extensions.sql
+│   │   ├── 002_enums.sql
+│   │   ├── 003_profiles.sql
+│   │   ├── 004_roles_permissions.sql
+│   │   ├── 005_wallets.sql
+│   │   ├── 006_ledger.sql
+│   │   ├── 007_deposits.sql
+│   │   ├── 008_payment_orders.sql
+│   │   ├── 009_agents.sql
+│   │   ├── 010_settlements.sql
+│   │   ├── 011_commissions.sql
+│   │   ├── 012_referrals.sql
+│   │   ├── 013_notifications.sql
+│   │   ├── 014_telegram.sql
+│   │   ├── 015_support.sql
+│   │   ├── 016_disputes.sql
+│   │   ├── 017_risk.sql
+│   │   ├── 018_audit.sql
+│   │   ├── 019_settings.sql
+│   │   └── 020_reporting.sql
+│   ├── seed/
+│   │   ├── dev_seed.sql
+│   │   └── README.md
+│   └── functions/
+│       ├── approve-deposit/
+│       ├── create-payment-order/
+│       ├── claim-order/
+│       ├── submit-payment/
+│       ├── approve-payment/
+│       ├── post-settlement/
+│       ├── request-withdrawal/
+│       ├── approve-withdrawal/
+│       └── credit-referral/
+│
+├── docs/
+│   ├── architecture.md
+│   ├── database.md
+│   ├── api.md
+│   ├── auth.md
+│   ├── security.md
+│   ├── ledger.md
+│   ├── deposits.md
+│   ├── payments.md
+│   ├── agents.md
+│   ├── referrals.md
+│   ├── notifications.md
+│   ├── telegram.md
+│   ├── operations.md
+│   ├── treasury.md
+│   ├── compliance.md
+│   ├── admin.md
+│   ├── deployment.md
+│   ├── local-development.md
+│   ├── testing.md
+│   ├── incident-response.md
+│   ├── customer-guide.md
+│   ├── agent-guide.md
+│   └── manager-guide.md
+│
+├── tests/
+│   ├── unit/
+│   │   ├── financial/
+│   │   ├── state-machines/
+│   │   └── permissions/
+│   ├── integration/
+│   │   ├── deposits/
+│   │   ├── orders/
+│   │   └── settlements/
+│   └── e2e/
+│       ├── customer.spec.ts
+│       ├── agent.spec.ts
+│       ├── manager.spec.ts
+│       └── admin.spec.ts
+│
+└── scripts/
+    ├── setup-local.sh
+    ├── reset-db.sh
+    └── migrate.sh
+```
+
+---
+
+## 6. Design System
+
+### 6.1 Visual Direction
+
+**Premium fintech + Liquid Glass aesthetics:**
+- Translucent layered surfaces
+- Soft depth and blur
+- Rounded cards
+- Floating navigation
+- Restrained micro-animations
+- Excellent typography hierarchy
+- Strong spatial rhythm
+
+### 6.2 Color Tokens
+
+```typescript
+// tailwind.config.ts
+export const colors = {
+  // Backgrounds
+  'bg-primary': '#F5F7FA',        // Light mode
+  'bg-primary-dark': '#070A0E',   // Dark mode
+  'bg-surface': '#FFFFFF',
+  'bg-surface-dark': '#0F1419',
+  'bg-elevated': '#FFFFFF',
+  'bg-elevated-dark': '#161C24',
+
+  // Text
+  'text-primary': '#111827',
+  'text-secondary': '#667085',
+  'text-tertiary': '#9CA3AF',
+  'text-inverse': '#FFFFFF',
+
+  // Accent
+  'accent': '#16A6A3',
+  'accent-light': '#E0F7F6',
+  'accent-dark': '#0D7E7C',
+
+  // Semantic
+  'success': '#16A34A',
+  'success-light': '#DCFCE7',
+  'warning': '#D97706',
+  'warning-light': '#FEF3C7',
+  'danger': '#DC2626',
+  'danger-light': '#FEE2E2',
+  'info': '#2563EB',
+  'info-light': '#DBEAFE',
+
+  // Glass
+  'glass-light': 'rgba(255,255,255,0.70)',
+  'glass-dark': 'rgba(15,20,25,0.70)',
+  'glass-border-light': 'rgba(255,255,255,0.40)',
+  'glass-border-dark': 'rgba(255,255,255,0.08)',
+};
+```
+
+### 6.3 Typography
+
+```typescript
+export const typography = {
+  fontFamily: {
+    sans: ['Inter', 'system-ui', 'sans-serif'],
+    mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+  },
+  fontSize: {
+    'xs': ['11px', { lineHeight: '16px', letterSpacing: '0.02em' }],
+    'sm': ['13px', { lineHeight: '20px' }],
+    'base': ['15px', { lineHeight: '24px' }],
+    'lg': ['17px', { lineHeight: '28px' }],
+    'xl': ['20px', { lineHeight: '32px' }],
+    '2xl': ['24px', { lineHeight: '36px' }],
+    '3xl': ['30px', { lineHeight: '40px' }],
+    '4xl': ['36px', { lineHeight: '48px' }],
+  },
+  fontWeight: {
+    normal: '400',
+    medium: '500',
+    semibold: '600',
+    bold: '700',
+  },
+};
+```
+
+### 6.4 Spacing Scale
+
+```
+4, 8, 12, 16, 20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 128
+```
+
+### 6.5 Border Radius
+
+```
+sm:      8px   (inputs, chips)
+md:      12px  (small cards, badges)
+lg:      16px  (standard cards)
+xl:      20px  (large cards)
+2xl:     24px  (primary cards)
+3xl:     28px  (hero surfaces)
+full:    9999px (pills, avatars)
+```
+
+### 6.6 Shadows
+
+```css
+--shadow-xs:   0 1px 2px rgba(0,0,0,0.05);
+--shadow-sm:   0 2px 4px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+--shadow-md:   0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+--shadow-lg:   0 8px 24px rgba(0,0,0,0.10), 0 4px 8px rgba(0,0,0,0.06);
+--shadow-xl:   0 16px 48px rgba(0,0,0,0.12), 0 8px 16px rgba(0,0,0,0.08);
+--shadow-glass: 0 8px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5);
+```
+
+### 6.7 Blur Values
+
+```
+blur-sm:   8px
+blur-md:   16px
+blur-lg:   24px
+blur-xl:   40px
+```
+
+### 6.8 Animation Tokens
+
+```css
+--duration-fast:    120ms
+--duration-normal:  200ms
+--duration-slow:    320ms
+--duration-slower:  500ms
+--ease-default:     cubic-bezier(0.4, 0, 0.2, 1)
+--ease-spring:      cubic-bezier(0.34, 1.56, 0.64, 1)
+--ease-out:         cubic-bezier(0, 0, 0.2, 1)
+```
+
+Reduced-motion: all transitions set to `0ms` when `prefers-reduced-motion: reduce`.
+
+### 6.9 Breakpoints
+
+```
+xs:   360px
+sm:   375px
+md:   768px
+lg:   1024px
+xl:   1280px
+2xl:  1440px
+```
+
+### 6.10 Touch Targets
+
+Minimum touch target: **44×44px** on all interactive elements.
+
+### 6.11 Glass Component Style
+
+```typescript
+// GlassCard component
+const glassStyles = {
+  base: [
+    'rounded-2xl',
+    'border border-white/40 dark:border-white/8',
+    'bg-white/70 dark:bg-slate-900/70',
+    'backdrop-blur-xl',
+    'shadow-glass',
+  ].join(' '),
+};
+```
+
+### 6.12 Dark Mode
+
+Support: `system | light | dark` — stored in localStorage and user profile.  
+Dark glass uses darker translucent materials preserving readability.  
+Reduced transparency option eliminates `backdrop-filter` and opacity.
+
+---
+
+## 7. Database Architecture
+
+### 7.1 Migration 001 — Extensions
+
+```sql
+-- 001_extensions.sql
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";  -- For text search
+```
+
+### 7.2 Migration 002 — Enums
+
+```sql
+-- 002_enums.sql
+
+CREATE TYPE user_role AS ENUM (
+  'OWNER',
+  'SUPER_ADMIN',
+  'FINANCE_ADMIN',
+  'TREASURY_ADMIN',
+  'COMPLIANCE_ADMIN',
+  'OPERATIONS_MANAGER',
+  'DEPOSIT_REVIEWER',
+  'PAYMENT_REVIEWER',
+  'AGENT_MANAGER',
+  'SUPPORT_AGENT',
+  'AUDITOR',
+  'AGENT',
+  'CUSTOMER'
+);
+
+CREATE TYPE kyc_status AS ENUM (
+  'NOT_STARTED',
+  'PENDING',
+  'UNDER_REVIEW',
+  'APPROVED',
+  'REJECTED',
+  'EXPIRED'
+);
+
+CREATE TYPE deposit_status AS ENUM (
+  'CREATED',
+  'TX_SUBMITTED',
+  'PENDING_VERIFICATION',
+  'VERIFIED',
+  'CREDITED',
+  'REJECTED',
+  'ESCALATED',
+  'DUPLICATE',
+  'RISK_HOLD'
+);
+
+CREATE TYPE order_status AS ENUM (
+  'DRAFT',
+  'QUOTE_CREATED',
+  'CONFIRMED',
+  'FUNDS_RESERVED',
+  'AVAILABLE',
+  'ASSIGNED',
+  'PAYMENT_SUBMITTED',
+  'MANAGER_REVIEW',
+  'APPROVED',
+  'COMPLETED',
+  'AGENT_SETTLEMENT_POSTED',
+  'COMMISSION_POSTED',
+  'REJECTED',
+  'DISPUTED',
+  'EXPIRED',
+  'CANCELLED',
+  'REFUNDED'
+);
+
+CREATE TYPE withdrawal_status AS ENUM (
+  'REQUESTED',
+  'RISK_CHECK',
+  'ADMIN_REVIEW',
+  'APPROVED',
+  'PROCESSING',
+  'PAID',
+  'REJECTED',
+  'HELD',
+  'CANCELLED'
+);
+
+CREATE TYPE agent_status AS ENUM (
+  'PENDING_ONBOARDING',
+  'UNDER_REVIEW',
+  'ACTIVE',
+  'LIMITED',
+  'SUSPENDED',
+  'BANNED'
+);
+
+CREATE TYPE network_type AS ENUM (
+  'TRON',
+  'ETHEREUM',
+  'BNB_SMART_CHAIN',
+  'POLYGON'
+);
+
+CREATE TYPE token_type AS ENUM (
+  'USDT',
+  'USDC'
+);
+
+CREATE TYPE ledger_direction AS ENUM ('DEBIT', 'CREDIT');
+
+CREATE TYPE ledger_entry_type AS ENUM (
+  'DEPOSIT_CREDIT',
+  'ORDER_RESERVE',
+  'ORDER_RELEASE',
+  'ORDER_DEBIT',
+  'AGENT_SETTLEMENT_CREDIT',
+  'AGENT_COMMISSION_CREDIT',
+  'AGENT_WITHDRAWAL_RESERVE',
+  'AGENT_WITHDRAWAL_DEBIT',
+  'REFERRAL_REWARD_CREDIT',
+  'MANUAL_ADJUSTMENT',
+  'REVERSAL'
+);
+
+CREATE TYPE support_status AS ENUM (
+  'OPEN',
+  'ASSIGNED',
+  'WAITING_CUSTOMER',
+  'WAITING_AGENT',
+  'ESCALATED',
+  'RESOLVED',
+  'CLOSED'
+);
+
+CREATE TYPE dispute_status AS ENUM (
+  'OPEN',
+  'INVESTIGATING',
+  'WAITING_CUSTOMER',
+  'WAITING_AGENT',
+  'ESCALATED',
+  'RESOLVED'
+);
+
+CREATE TYPE risk_level AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL');
+
+CREATE TYPE risk_flag AS ENUM (
+  'HIGH_VALUE',
+  'UNUSUAL_VELOCITY',
+  'MULTIPLE_ACCOUNTS',
+  'SUSPICIOUS_WALLET',
+  'PAYMENT_DISPUTE',
+  'AGENT_BEHAVIOR',
+  'MANUAL_REVIEW'
+);
+
+CREATE TYPE notification_type AS ENUM (
+  'TRANSACTION',
+  'ORDER',
+  'SECURITY',
+  'REFERRAL',
+  'SYSTEM',
+  'PROMOTION'
+);
+
+CREATE TYPE notification_channel AS ENUM (
+  'IN_APP',
+  'TELEGRAM',
+  'EMAIL',
+  'SMS'
+);
+
+CREATE TYPE ticket_priority AS ENUM ('LOW', 'NORMAL', 'HIGH', 'URGENT');
+```
+
+### 7.3 Migration 003 — Profiles
+
+```sql
+-- 003_profiles.sql
+
+CREATE TABLE profiles (
+  id            uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  role          user_role NOT NULL DEFAULT 'CUSTOMER',
+  email         text UNIQUE NOT NULL,
+  phone         text UNIQUE,
+  full_name     text,
+  display_name  text,
+  avatar_url    text,
+  kyc_status    kyc_status NOT NULL DEFAULT 'NOT_STARTED',
+  risk_level    risk_level NOT NULL DEFAULT 'LOW',
+  is_active     boolean NOT NULL DEFAULT true,
+  is_frozen     boolean NOT NULL DEFAULT false,
+  frozen_reason text,
+  frozen_at     timestamptz,
+  frozen_by     uuid REFERENCES profiles(id),
+  referral_code text UNIQUE,
+  referred_by   uuid REFERENCES profiles(id),
+  telegram_chat_id   bigint UNIQUE,
+  telegram_linked_at timestamptz,
+  totp_enabled  boolean NOT NULL DEFAULT false,
+  last_login_at timestamptz,
+  last_login_ip inet,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT profiles_email_check CHECK (email ~* '^[^@]+@[^@]+\.[^@]+$')
+);
+
+CREATE INDEX idx_profiles_role ON profiles(role);
+CREATE INDEX idx_profiles_referral_code ON profiles(referral_code);
+CREATE INDEX idx_profiles_referred_by ON profiles(referred_by);
+CREATE INDEX idx_profiles_email_trgm ON profiles USING gin(email gin_trgm_ops);
+CREATE INDEX idx_profiles_phone ON profiles(phone);
+
+-- KYC documents
+CREATE TABLE kyc_documents (
+  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id         uuid NOT NULL REFERENCES profiles(id),
+  document_type   text NOT NULL,  -- 'AADHAAR' | 'PAN' | 'PASSPORT' | 'VOTER_ID' | 'DRIVING_LICENSE'
+  document_number text,           -- stored encrypted or hashed
+  front_file_path text,
+  back_file_path  text,
+  selfie_file_path text,
+  status          kyc_status NOT NULL DEFAULT 'PENDING',
+  verified_by     uuid REFERENCES profiles(id),
+  verified_at     timestamptz,
+  rejected_reason text,
+  reviewer_notes  text,
+  screening_result jsonb,         -- AML screening payload
+  expires_at      timestamptz,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_kyc_documents_user_id ON kyc_documents(user_id);
+
+-- Session/device tracking
+CREATE TABLE user_sessions (
+  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id     uuid NOT NULL REFERENCES profiles(id),
+  session_token text,             -- hashed reference
+  device_name text,
+  device_type text,
+  browser     text,
+  os          text,
+  ip_address  inet,
+  country     text,
+  is_active   boolean NOT NULL DEFAULT true,
+  last_active_at timestamptz NOT NULL DEFAULT now(),
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  revoked_at  timestamptz,
+  revoked_reason text
+);
+
+CREATE INDEX idx_user_sessions_user_id ON user_sessions(user_id);
+CREATE INDEX idx_user_sessions_active ON user_sessions(user_id, is_active);
+```
+
+### 7.4 Migration 004 — Roles & Permissions
+
+```sql
+-- 004_roles_permissions.sql
+
+-- Role permission matrix (enforced in application layer + RLS)
+CREATE TABLE role_permissions (
+  id         uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  role       user_role NOT NULL,
+  resource   text NOT NULL,   -- e.g. 'deposits', 'orders', 'users'
+  action     text NOT NULL,   -- e.g. 'view', 'create', 'approve', 'reject'
+  created_at timestamptz NOT NULL DEFAULT now(),
+
+  UNIQUE(role, resource, action)
+);
+
+-- Insert default permissions
+INSERT INTO role_permissions (role, resource, action) VALUES
+  -- CUSTOMER
+  ('CUSTOMER', 'own_profile', 'view'),
+  ('CUSTOMER', 'own_profile', 'update'),
+  ('CUSTOMER', 'own_deposits', 'view'),
+  ('CUSTOMER', 'own_deposits', 'create'),
+  ('CUSTOMER', 'own_orders', 'view'),
+  ('CUSTOMER', 'own_orders', 'create'),
+  ('CUSTOMER', 'own_orders', 'cancel'),
+  ('CUSTOMER', 'own_wallet', 'view'),
+  ('CUSTOMER', 'own_referrals', 'view'),
+  ('CUSTOMER', 'own_notifications', 'view'),
+  ('CUSTOMER', 'own_support', 'view'),
+  ('CUSTOMER', 'own_support', 'create'),
+
+  -- AGENT
+  ('AGENT', 'own_profile', 'view'),
+  ('AGENT', 'own_profile', 'update'),
+  ('AGENT', 'available_orders', 'view'),
+  ('AGENT', 'available_orders', 'claim'),
+  ('AGENT', 'own_orders', 'view'),
+  ('AGENT', 'own_orders', 'submit_payment'),
+  ('AGENT', 'own_wallet', 'view'),
+  ('AGENT', 'own_withdrawals', 'view'),
+  ('AGENT', 'own_withdrawals', 'create'),
+  ('AGENT', 'own_referrals', 'view'),
+  ('AGENT', 'own_earnings', 'view'),
+  ('AGENT', 'own_performance', 'view'),
+
+  -- DEPOSIT_REVIEWER
+  ('DEPOSIT_REVIEWER', 'deposits', 'view'),
+  ('DEPOSIT_REVIEWER', 'deposits', 'approve'),
+  ('DEPOSIT_REVIEWER', 'deposits', 'reject'),
+  ('DEPOSIT_REVIEWER', 'deposits', 'escalate'),
+  ('DEPOSIT_REVIEWER', 'users', 'view'),
+
+  -- PAYMENT_REVIEWER
+  ('PAYMENT_REVIEWER', 'payments', 'view'),
+  ('PAYMENT_REVIEWER', 'payments', 'approve'),
+  ('PAYMENT_REVIEWER', 'payments', 'reject'),
+  ('PAYMENT_REVIEWER', 'payments', 'dispute'),
+  ('PAYMENT_REVIEWER', 'agents', 'view'),
+  ('PAYMENT_REVIEWER', 'users', 'view'),
+
+  -- OPERATIONS_MANAGER
+  ('OPERATIONS_MANAGER', 'deposits', 'view'),
+  ('OPERATIONS_MANAGER', 'deposits', 'approve'),
+  ('OPERATIONS_MANAGER', 'deposits', 'reject'),
+  ('OPERATIONS_MANAGER', 'deposits', 'escalate'),
+  ('OPERATIONS_MANAGER', 'payments', 'view'),
+  ('OPERATIONS_MANAGER', 'payments', 'approve'),
+  ('OPERATIONS_MANAGER', 'payments', 'reject'),
+  ('OPERATIONS_MANAGER', 'payments', 'dispute'),
+  ('OPERATIONS_MANAGER', 'disputes', 'view'),
+  ('OPERATIONS_MANAGER', 'disputes', 'manage'),
+  ('OPERATIONS_MANAGER', 'users', 'view'),
+  ('OPERATIONS_MANAGER', 'users', 'freeze'),
+  ('OPERATIONS_MANAGER', 'agents', 'view'),
+  ('OPERATIONS_MANAGER', 'agents', 'limit'),
+  ('OPERATIONS_MANAGER', 'risk', 'view'),
+  ('OPERATIONS_MANAGER', 'support', 'view'),
+  ('OPERATIONS_MANAGER', 'support', 'manage'),
+
+  -- FINANCE_ADMIN
+  ('FINANCE_ADMIN', 'deposits', 'view'),
+  ('FINANCE_ADMIN', 'orders', 'view'),
+  ('FINANCE_ADMIN', 'settlements', 'view'),
+  ('FINANCE_ADMIN', 'withdrawals', 'view'),
+  ('FINANCE_ADMIN', 'withdrawals', 'approve'),
+  ('FINANCE_ADMIN', 'withdrawals', 'reject'),
+  ('FINANCE_ADMIN', 'commissions', 'view'),
+  ('FINANCE_ADMIN', 'referral_rewards', 'view'),
+  ('FINANCE_ADMIN', 'referral_rewards', 'approve'),
+  ('FINANCE_ADMIN', 'treasury', 'view'),
+  ('FINANCE_ADMIN', 'reconciliation', 'view'),
+  ('FINANCE_ADMIN', 'reports', 'view'),
+  ('FINANCE_ADMIN', 'reports', 'export'),
+
+  -- TREASURY_ADMIN
+  ('TREASURY_ADMIN', 'treasury', 'view'),
+  ('TREASURY_ADMIN', 'treasury', 'update'),
+  ('TREASURY_ADMIN', 'reconciliation', 'view'),
+  ('TREASURY_ADMIN', 'reconciliation', 'manage'),
+  ('TREASURY_ADMIN', 'withdrawals', 'pay'),
+  ('TREASURY_ADMIN', 'rates', 'view'),
+  ('TREASURY_ADMIN', 'rates', 'update'),
+
+  -- SUPER_ADMIN (inherits all)
+  ('SUPER_ADMIN', 'all', 'all'),
+
+  -- OWNER (inherits all + emergency)
+  ('OWNER', 'all', 'all'),
+  ('OWNER', 'emergency', 'all');
+```
+
+### 7.5 Migration 005 — Wallets
+
+```sql
+-- 005_wallets.sql
+
+-- Central treasury wallets (admin-managed)
+CREATE TABLE treasury_wallets (
+  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  network         network_type NOT NULL,
+  token           token_type NOT NULL DEFAULT 'USDT',
+  public_address  text NOT NULL,
+  label           text NOT NULL,  -- e.g. "Primary TRON USDT"
+  is_active       boolean NOT NULL DEFAULT true,
+  is_deposit_address boolean NOT NULL DEFAULT false,
+  status          text NOT NULL DEFAULT 'ACTIVE',  -- 'ACTIVE' | 'DEPRECATED' | 'COMPROMISED'
+  effective_from  timestamptz NOT NULL DEFAULT now(),
+  effective_to    timestamptz,
+  changed_by      uuid REFERENCES profiles(id),
+  notes           text,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at      timestamptz NOT NULL DEFAULT now(),
+
+  UNIQUE(network, public_address)
+);
+
+-- Observed treasury balance (manually updated)
+CREATE TABLE treasury_balance_snapshots (
+  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  wallet_id       uuid NOT NULL REFERENCES treasury_wallets(id),
+  observed_balance numeric(38,18) NOT NULL,
+  observation_time timestamptz NOT NULL DEFAULT now(),
+  block_height    bigint,
+  observed_by     uuid REFERENCES profiles(id),
+  notes           text,
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_treasury_balance_wallet ON treasury_balance_snapshots(wallet_id, observation_time DESC);
+```
+
+### 7.6 Migration 006 — Ledger
+
+```sql
+-- 006_ledger.sql
+
+-- Ledger accounts (one per user, plus platform accounts)
+CREATE TABLE ledger_accounts (
+  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id     uuid REFERENCES profiles(id),       -- NULL for platform accounts
+  account_type text NOT NULL,                      -- 'CUSTOMER_USDT' | 'AGENT_USDT' | 'PLATFORM_REVENUE' | 'PLATFORM_FLOAT'
+  currency    text NOT NULL DEFAULT 'USDT',
+  is_platform boolean NOT NULL DEFAULT false,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+
+  UNIQUE(user_id, account_type)
+);
+
+-- Platform accounts (seeded)
+INSERT INTO ledger_accounts (user_id, account_type, currency, is_platform) VALUES
+  (NULL, 'PLATFORM_REVENUE', 'USDT', true),
+  (NULL, 'PLATFORM_FLOAT', 'USDT', true),
+  (NULL, 'PLATFORM_RESERVES', 'USDT', true);
+
+-- Ledger transactions (financial events)
+CREATE TABLE ledger_transactions (
+  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  correlation_id  uuid NOT NULL DEFAULT uuid_generate_v4(),
+  transaction_type ledger_entry_type NOT NULL,
+  description     text NOT NULL,
+  reference_type  text,       -- 'DEPOSIT' | 'ORDER' | 'SETTLEMENT' | 'WITHDRAWAL' | 'REFERRAL' | 'ADJUSTMENT'
+  reference_id    uuid,       -- FK to relevant entity
+  actor_id        uuid REFERENCES profiles(id),
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  metadata        jsonb
+);
+
+CREATE INDEX idx_ledger_transactions_ref ON ledger_transactions(reference_type, reference_id);
+CREATE INDEX idx_ledger_transactions_actor ON ledger_transactions(actor_id);
+CREATE INDEX idx_ledger_transactions_correlation ON ledger_transactions(correlation_id);
+
+-- Ledger entries (double-entry: every transaction has >= 2 entries)
+CREATE TABLE ledger_entries (
+  id                  uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  transaction_id      uuid NOT NULL REFERENCES ledger_transactions(id),
+  account_id          uuid NOT NULL REFERENCES ledger_accounts(id),
+  direction           ledger_direction NOT NULL,
+  amount              numeric(38,18) NOT NULL,
+  balance_after       numeric(38,18) NOT NULL,  -- running balance at time of entry
+  currency            text NOT NULL DEFAULT 'USDT',
+  created_at          timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT ledger_entries_amount_positive CHECK (amount > 0)
+);
+
+CREATE INDEX idx_ledger_entries_account ON ledger_entries(account_id, created_at DESC);
+CREATE INDEX idx_ledger_entries_transaction ON ledger_entries(transaction_id);
+
+-- Materialized balance view (updated by trigger)
+CREATE TABLE account_balances (
+  account_id      uuid PRIMARY KEY REFERENCES ledger_accounts(id),
+  available       numeric(38,18) NOT NULL DEFAULT 0,
+  reserved        numeric(38,18) NOT NULL DEFAULT 0,
+  pending         numeric(38,18) NOT NULL DEFAULT 0,
+  total           numeric(38,18) GENERATED ALWAYS AS (available + reserved + pending) STORED,
+  updated_at      timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT balances_available_non_negative CHECK (available >= 0),
+  CONSTRAINT balances_reserved_non_negative CHECK (reserved >= 0),
+  CONSTRAINT balances_pending_non_negative CHECK (pending >= 0)
+);
+
+-- Balance update function (called by server-side operations only)
+CREATE OR REPLACE FUNCTION update_account_balance(
+  p_account_id uuid,
+  p_available_delta numeric(38,18),
+  p_reserved_delta numeric(38,18),
+  p_pending_delta numeric(38,18)
+) RETURNS void AS $$
+BEGIN
+  INSERT INTO account_balances (account_id, available, reserved, pending)
+  VALUES (p_account_id, 0, 0, 0)
+  ON CONFLICT (account_id) DO NOTHING;
+
+  UPDATE account_balances SET
+    available  = available + p_available_delta,
+    reserved   = reserved  + p_reserved_delta,
+    pending    = pending   + p_pending_delta,
+    updated_at = now()
+  WHERE account_id = p_account_id;
+
+  -- Invariant checks
+  IF (SELECT available FROM account_balances WHERE account_id = p_account_id) < 0 THEN
+    RAISE EXCEPTION 'Insufficient available balance for account %', p_account_id;
+  END IF;
+  IF (SELECT reserved FROM account_balances WHERE account_id = p_account_id) < 0 THEN
+    RAISE EXCEPTION 'Insufficient reserved balance for account %', p_account_id;
+  END IF;
+  IF (SELECT pending FROM account_balances WHERE account_id = p_account_id) < 0 THEN
+    RAISE EXCEPTION 'Insufficient pending balance for account %', p_account_id;
+  END IF;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+### 7.7 Migration 007 — Deposits
+
+```sql
+-- 007_deposits.sql
+
+CREATE TABLE deposits (
+  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  display_id      text UNIQUE NOT NULL,   -- e.g. "DEP-128821"
+  user_id         uuid NOT NULL REFERENCES profiles(id),
+  wallet_id       uuid REFERENCES treasury_wallets(id),
+  network         network_type NOT NULL,
+  token           token_type NOT NULL DEFAULT 'USDT',
+  expected_amount numeric(38,18) NOT NULL,
+  received_amount numeric(38,18),
+  tx_hash         text,
+  from_address    text,
+  status          deposit_status NOT NULL DEFAULT 'CREATED',
+  submitted_at    timestamptz,
+  verified_at     timestamptz,
+  credited_at     timestamptz,
+  reviewed_by     uuid REFERENCES profiles(id),
+  rejection_reason text,
+  escalation_reason text,
+  escalated_to    uuid REFERENCES profiles(id),
+  risk_hold_reason text,
+  idempotency_key text UNIQUE,
+  notes           text,
+  metadata        jsonb,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at      timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT deposits_expected_positive CHECK (expected_amount > 0),
+  CONSTRAINT deposits_received_positive CHECK (received_amount IS NULL OR received_amount > 0)
+);
+
+-- CRITICAL: prevent double-crediting same TX hash
+CREATE UNIQUE INDEX idx_deposits_tx_hash_unique
+  ON deposits(tx_hash)
+  WHERE tx_hash IS NOT NULL AND status IN ('CREDITED', 'VERIFIED');
+
+CREATE INDEX idx_deposits_user_id ON deposits(user_id);
+CREATE INDEX idx_deposits_status ON deposits(status);
+CREATE INDEX idx_deposits_created_at ON deposits(created_at DESC);
+CREATE INDEX idx_deposits_tx_hash ON deposits(tx_hash) WHERE tx_hash IS NOT NULL;
+
+-- Auto-generate display_id
+CREATE SEQUENCE deposit_seq START 100001;
+
+CREATE OR REPLACE FUNCTION generate_deposit_display_id() RETURNS trigger AS $$
+BEGIN
+  NEW.display_id := 'DEP-' || nextval('deposit_seq')::text;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER deposits_display_id_trigger
+  BEFORE INSERT ON deposits
+  FOR EACH ROW WHEN (NEW.display_id IS NULL)
+  EXECUTE FUNCTION generate_deposit_display_id();
+```
+
+### 7.8 Migration 008 — Payment Orders
+
+```sql
+-- 008_payment_orders.sql
+
+CREATE TABLE payment_orders (
+  id                    uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  display_id            text UNIQUE NOT NULL,   -- e.g. "ORD-298710"
+  customer_id           uuid NOT NULL REFERENCES profiles(id),
+  agent_id              uuid REFERENCES profiles(id),
+
+  -- Recipient
+  recipient_upi_id      text NOT NULL,
+  recipient_name        text,
+  recipient_qr_raw      text,         -- raw QR payload
+  recipient_qr_parsed   jsonb,        -- parsed QR fields
+
+  -- Amounts (INR)
+  inr_amount            numeric(38,2) NOT NULL,
+  platform_fee_inr      numeric(38,2) NOT NULL DEFAULT 0,
+  total_inr             numeric(38,2) NOT NULL,
+
+  -- Rate snapshot (immutable once set)
+  customer_rate         numeric(38,8) NOT NULL,  -- INR per USDT at quote time
+  agent_rate            numeric(38,8) NOT NULL,
+  commission_rate       numeric(38,4) NOT NULL,  -- percentage, e.g. 1.5000
+
+  -- USDT amounts
+  customer_usdt_debit   numeric(38,18) NOT NULL,
+  agent_usdt_reimburse  numeric(38,18),
+  agent_commission_usdt numeric(38,18),
+  agent_total_usdt      numeric(38,18),
+  platform_contribution numeric(38,18),
+
+  -- Status
+  status                order_status NOT NULL DEFAULT 'DRAFT',
+  expires_at            timestamptz,
+  available_at          timestamptz,
+  assigned_at           timestamptz,
+  payment_submitted_at  timestamptz,
+  completed_at          timestamptz,
+  cancelled_at          timestamptz,
+  expired_at            timestamptz,
+
+  -- Agent payment proof
+  agent_payment_ref     text,         -- UTR or reference number
+  agent_payment_time    timestamptz,
+  agent_payment_notes   text,
+  agent_proof_path      text,         -- path in storage
+
+  -- Review
+  reviewed_by           uuid REFERENCES profiles(id),
+  reviewed_at           timestamptz,
+  rejection_reason      text,
+
+  -- Idempotency
+  quote_idempotency_key text UNIQUE,
+  claim_idempotency_key text UNIQUE,
+
+  metadata              jsonb,
+  created_at            timestamptz NOT NULL DEFAULT now(),
+  updated_at            timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT orders_inr_positive CHECK (inr_amount > 0),
+  CONSTRAINT orders_usdt_positive CHECK (customer_usdt_debit > 0)
+);
+
+-- Prevent duplicate order claim
+CREATE UNIQUE INDEX idx_orders_agent_active
+  ON payment_orders(agent_id)
+  WHERE agent_id IS NOT NULL AND status IN ('ASSIGNED', 'PAYMENT_SUBMITTED', 'MANAGER_REVIEW');
+
+-- General indexes
+CREATE INDEX idx_orders_customer ON payment_orders(customer_id);
+CREATE INDEX idx_orders_agent ON payment_orders(agent_id);
+CREATE INDEX idx_orders_status ON payment_orders(status);
+CREATE INDEX idx_orders_expires ON payment_orders(expires_at) WHERE status = 'AVAILABLE';
+CREATE INDEX idx_orders_created ON payment_orders(created_at DESC);
+
+CREATE SEQUENCE order_seq START 200001;
+
+CREATE OR REPLACE FUNCTION generate_order_display_id() RETURNS trigger AS $$
+BEGIN
+  NEW.display_id := 'ORD-' || nextval('order_seq')::text;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER orders_display_id_trigger
+  BEFORE INSERT ON payment_orders
+  FOR EACH ROW WHEN (NEW.display_id IS NULL)
+  EXECUTE FUNCTION generate_order_display_id();
+
+-- Order state transition log
+CREATE TABLE order_transitions (
+  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  order_id    uuid NOT NULL REFERENCES payment_orders(id),
+  from_status order_status,
+  to_status   order_status NOT NULL,
+  actor_id    uuid REFERENCES profiles(id),
+  reason      text,
+  metadata    jsonb,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_order_transitions_order ON order_transitions(order_id);
+```
+
+### 7.9 Migration 009 — Agents
+
+```sql
+-- 009_agents.sql
+
+CREATE TABLE agent_profiles (
+  id                    uuid PRIMARY KEY REFERENCES profiles(id),
+  status                agent_status NOT NULL DEFAULT 'PENDING_ONBOARDING',
+  display_name          text,
+
+  -- Payment channel
+  upi_id                text,
+  upi_verified          boolean NOT NULL DEFAULT false,
+  payment_channel_type  text DEFAULT 'UPI',  -- extensible
+  payment_channel_notes text,
+
+  -- Limits
+  max_active_orders     int NOT NULL DEFAULT 3,
+  max_order_size_inr    numeric(38,2) NOT NULL DEFAULT 50000,
+  daily_volume_limit_inr numeric(38,2) NOT NULL DEFAULT 200000,
+  commission_tier       text NOT NULL DEFAULT 'STANDARD',  -- 'STANDARD' | 'TRUSTED' | 'PREMIUM'
+
+  -- Performance
+  total_orders          int NOT NULL DEFAULT 0,
+  successful_orders     int NOT NULL DEFAULT 0,
+  failed_orders         int NOT NULL DEFAULT 0,
+  disputed_orders       int NOT NULL DEFAULT 0,
+  total_inr_paid        numeric(38,2) NOT NULL DEFAULT 0,
+  total_usdt_earned     numeric(38,18) NOT NULL DEFAULT 0,
+  reputation_score      numeric(5,2) NOT NULL DEFAULT 100.00,
+
+  -- Onboarding
+  profile_completed     boolean NOT NULL DEFAULT false,
+  verification_completed boolean NOT NULL DEFAULT false,
+  training_completed    boolean NOT NULL DEFAULT false,
+  agreement_signed      boolean NOT NULL DEFAULT false,
+  agreement_signed_at   timestamptz,
+  onboarding_completed  boolean NOT NULL DEFAULT false,
+
+  -- Risk
+  risk_level            risk_level NOT NULL DEFAULT 'LOW',
+  suspension_reason     text,
+  suspended_at          timestamptz,
+  suspended_by          uuid REFERENCES profiles(id),
+  ban_reason            text,
+  banned_at             timestamptz,
+  banned_by             uuid REFERENCES profiles(id),
+
+  reviewed_by           uuid REFERENCES profiles(id),
+  reviewed_at           timestamptz,
+  notes                 text,
+  metadata              jsonb,
+  created_at            timestamptz NOT NULL DEFAULT now(),
+  updated_at            timestamptz NOT NULL DEFAULT now()
+);
+
+-- Agent training progress
+CREATE TABLE agent_training (
+  id            uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  agent_id      uuid NOT NULL REFERENCES agent_profiles(id),
+  module_id     text NOT NULL,
+  version       text NOT NULL DEFAULT '1.0',
+  completed_at  timestamptz NOT NULL DEFAULT now(),
+  acknowledged  boolean NOT NULL DEFAULT false,
+
+  UNIQUE(agent_id, module_id, version)
+);
+```
+
+### 7.10 Migration 010 — Settlements
+
+```sql
+-- 010_settlements.sql
+
+CREATE TABLE agent_settlements (
+  id                  uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  display_id          text UNIQUE NOT NULL,
+  order_id            uuid UNIQUE NOT NULL REFERENCES payment_orders(id),
+  agent_id            uuid NOT NULL REFERENCES profiles(id),
+
+  inr_paid            numeric(38,2) NOT NULL,
+  agent_rate          numeric(38,8) NOT NULL,
+  base_usdt           numeric(38,18) NOT NULL,
+  commission_rate     numeric(38,4) NOT NULL,
+  commission_inr      numeric(38,2) NOT NULL,
+  commission_usdt     numeric(38,18) NOT NULL,
+  total_usdt          numeric(38,18) NOT NULL,
+
+  status              text NOT NULL DEFAULT 'PENDING',  -- 'PENDING' | 'APPROVED' | 'CREDITED' | 'REVERSED'
+  approved_by         uuid REFERENCES profiles(id),
+  approved_at         timestamptz,
+  credited_at         timestamptz,
+  ledger_transaction_id uuid REFERENCES ledger_transactions(id),
+
+  idempotency_key     text UNIQUE,
+  notes               text,
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  updated_at          timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_settlements_agent ON agent_settlements(agent_id);
+CREATE INDEX idx_settlements_status ON agent_settlements(status);
+
+CREATE SEQUENCE settlement_seq START 300001;
+
+CREATE OR REPLACE FUNCTION generate_settlement_display_id() RETURNS trigger AS $$
+BEGIN
+  NEW.display_id := 'SET-' || nextval('settlement_seq')::text;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER settlements_display_id_trigger
+  BEFORE INSERT ON agent_settlements
+  FOR EACH ROW WHEN (NEW.display_id IS NULL)
+  EXECUTE FUNCTION generate_settlement_display_id();
+```
+
+### 7.11 Migration 011 — Commissions (separate tracking)
+
+```sql
+-- 011_commissions.sql
+
+-- Commission is part of settlement but tracked separately for reporting
+CREATE TABLE commission_records (
+  id                  uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  settlement_id       uuid UNIQUE NOT NULL REFERENCES agent_settlements(id),
+  agent_id            uuid NOT NULL REFERENCES profiles(id),
+  order_id            uuid NOT NULL REFERENCES payment_orders(id),
+  commission_rate     numeric(38,4) NOT NULL,
+  commission_inr      numeric(38,2) NOT NULL,
+  commission_usdt     numeric(38,18) NOT NULL,
+  status              text NOT NULL DEFAULT 'PENDING',
+  credited_at         timestamptz,
+  created_at          timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_commissions_agent ON commission_records(agent_id);
+```
+
+### 7.12 Migration 012 — Referrals
+
+```sql
+-- 012_referrals.sql
+
+CREATE TABLE referral_relationships (
+  id                uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  referrer_id       uuid NOT NULL REFERENCES profiles(id),
+  referred_id       uuid UNIQUE NOT NULL REFERENCES profiles(id),  -- one referrer per user
+  referral_code     text NOT NULL,
+  relationship_type text NOT NULL DEFAULT 'CUSTOMER',  -- 'CUSTOMER' | 'AGENT'
+  depth             int NOT NULL DEFAULT 1,
+  is_qualified      boolean NOT NULL DEFAULT false,
+  qualified_at      timestamptz,
+  fraud_flagged     boolean NOT NULL DEFAULT false,
+  fraud_reason      text,
+  created_at        timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT no_self_referral CHECK (referrer_id != referred_id)
+);
+
+CREATE INDEX idx_referrals_referrer ON referral_relationships(referrer_id);
+CREATE INDEX idx_referrals_referred ON referral_relationships(referred_id);
+
+CREATE TABLE referral_rewards (
+  id                uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  referrer_id       uuid NOT NULL REFERENCES profiles(id),
+  referred_id       uuid NOT NULL REFERENCES profiles(id),
+  relationship_id   uuid NOT NULL REFERENCES referral_relationships(id),
+  reward_type       text NOT NULL,   -- 'SIGNUP' | 'FIRST_ORDER' | 'VOLUME' | 'AGENT_PARTNER'
+  trigger_event_id  uuid,            -- order_id or deposit_id that triggered
+  reward_usdt       numeric(38,18) NOT NULL,
+  status            text NOT NULL DEFAULT 'PENDING',  -- 'PENDING' | 'APPROVED' | 'CREDITED' | 'REVERSED' | 'REJECTED'
+  approved_by       uuid REFERENCES profiles(id),
+  approved_at       timestamptz,
+  credited_at       timestamptz,
+  rejection_reason  text,
+  fraud_flagged     boolean NOT NULL DEFAULT false,
+  ledger_tx_id      uuid REFERENCES ledger_transactions(id),
+  idempotency_key   text UNIQUE,
+  notes             text,
+  created_at        timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_referral_rewards_referrer ON referral_rewards(referrer_id);
+CREATE INDEX idx_referral_rewards_status ON referral_rewards(status);
+```
+
+### 7.13 Migration 013 — Notifications
+
+```sql
+-- 013_notifications.sql
+
+CREATE TABLE notification_templates (
+  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  event_key   text UNIQUE NOT NULL,
+  title_template text NOT NULL,
+  body_template  text NOT NULL,
+  telegram_template text,
+  email_template text,
+  channels    notification_channel[] NOT NULL DEFAULT '{IN_APP}',
+  is_active   boolean NOT NULL DEFAULT true,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE notifications (
+  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id     uuid NOT NULL REFERENCES profiles(id),
+  type        notification_type NOT NULL,
+  event_key   text,
+  title       text NOT NULL,
+  body        text NOT NULL,
+  route       text,           -- deep link
+  is_read     boolean NOT NULL DEFAULT false,
+  read_at     timestamptz,
+  channel     notification_channel NOT NULL DEFAULT 'IN_APP',
+  delivery_status text,       -- 'PENDING' | 'SENT' | 'FAILED'
+  delivered_at timestamptz,
+  metadata    jsonb,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_notifications_user ON notifications(user_id, created_at DESC);
+CREATE INDEX idx_notifications_unread ON notifications(user_id) WHERE NOT is_read;
+```
+
+### 7.14 Migration 014 — Telegram
+
+```sql
+-- 014_telegram.sql
+
+CREATE TABLE telegram_link_tokens (
+  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id     uuid UNIQUE NOT NULL REFERENCES profiles(id),
+  token       text UNIQUE NOT NULL,     -- one-time token
+  expires_at  timestamptz NOT NULL,
+  used_at     timestamptz,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE telegram_messages (
+  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id         uuid REFERENCES profiles(id),
+  telegram_chat_id bigint NOT NULL,
+  direction       text NOT NULL,   -- 'OUTBOUND' | 'INBOUND'
+  message_text    text,
+  telegram_msg_id bigint,
+  update_id       bigint UNIQUE,   -- Telegram update_id for deduplication
+  event_key       text,
+  status          text NOT NULL DEFAULT 'PENDING',
+  sent_at         timestamptz,
+  error           text,
+  metadata        jsonb,
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_telegram_messages_user ON telegram_messages(user_id);
+CREATE INDEX idx_telegram_messages_chat ON telegram_messages(telegram_chat_id);
+```
+
+### 7.15 Migration 015 — Support
+
+```sql
+-- 015_support.sql
+
+CREATE TABLE support_tickets (
+  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  display_id      text UNIQUE NOT NULL,   -- e.g. "TKT-500123"
+  user_id         uuid NOT NULL REFERENCES profiles(id),
+  assigned_to     uuid REFERENCES profiles(id),
+  category        text NOT NULL,   -- 'DEPOSIT' | 'ORDER' | 'PAYMENT' | 'WITHDRAWAL' | 'ACCOUNT' | 'OTHER'
+  subject         text NOT NULL,
+  status          support_status NOT NULL DEFAULT 'OPEN',
+  priority        ticket_priority NOT NULL DEFAULT 'NORMAL',
+  entity_type     text,            -- related entity type
+  entity_id       uuid,            -- related entity id
+  resolved_at     timestamptz,
+  closed_at       timestamptz,
+  metadata        jsonb,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE SEQUENCE ticket_seq START 500001;
+
+CREATE OR REPLACE FUNCTION generate_ticket_display_id() RETURNS trigger AS $$
+BEGIN
+  NEW.display_id := 'TKT-' || nextval('ticket_seq')::text;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tickets_display_id_trigger
+  BEFORE INSERT ON support_tickets
+  FOR EACH ROW WHEN (NEW.display_id IS NULL)
+  EXECUTE FUNCTION generate_ticket_display_id();
+
+CREATE TABLE ticket_messages (
+  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  ticket_id   uuid NOT NULL REFERENCES support_tickets(id),
+  author_id   uuid NOT NULL REFERENCES profiles(id),
+  body        text NOT NULL,
+  is_internal boolean NOT NULL DEFAULT false,   -- internal notes
+  attachments text[],                           -- storage paths
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_ticket_messages_ticket ON ticket_messages(ticket_id);
+CREATE INDEX idx_support_tickets_user ON support_tickets(user_id);
+CREATE INDEX idx_support_tickets_status ON support_tickets(status);
+```
+
+### 7.16 Migration 016 — Disputes
+
+```sql
+-- 016_disputes.sql
+
+CREATE TABLE disputes (
+  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  display_id      text UNIQUE NOT NULL,
+  order_id        uuid UNIQUE NOT NULL REFERENCES payment_orders(id),
+  raised_by       uuid NOT NULL REFERENCES profiles(id),
+  assigned_to     uuid REFERENCES profiles(id),
+  status          dispute_status NOT NULL DEFAULT 'OPEN',
+  reason          text NOT NULL,
+  resolution      text,
+  resolution_type text,  -- 'REFUNDED' | 'SETTLED_AS_IS' | 'PARTIAL_REFUND' | 'NO_ACTION'
+  ledger_impact   jsonb,
+  resolved_at     timestamptz,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE dispute_messages (
+  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  dispute_id  uuid NOT NULL REFERENCES disputes(id),
+  author_id   uuid NOT NULL REFERENCES profiles(id),
+  body        text NOT NULL,
+  is_internal boolean NOT NULL DEFAULT false,
+  attachments text[],
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE SEQUENCE dispute_seq START 600001;
+
+CREATE OR REPLACE FUNCTION generate_dispute_display_id() RETURNS trigger AS $$
+BEGIN
+  NEW.display_id := 'DSP-' || nextval('dispute_seq')::text;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER disputes_display_id_trigger
+  BEFORE INSERT ON disputes
+  FOR EACH ROW WHEN (NEW.display_id IS NULL)
+  EXECUTE FUNCTION generate_dispute_display_id();
+```
+
+### 7.17 Migration 017 — Risk
+
+```sql
+-- 017_risk.sql
+
+CREATE TABLE risk_events (
+  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id     uuid REFERENCES profiles(id),
+  entity_type text,    -- 'USER' | 'DEPOSIT' | 'ORDER' | 'WITHDRAWAL' | 'AGENT'
+  entity_id   uuid,
+  flag        risk_flag NOT NULL,
+  level       risk_level NOT NULL DEFAULT 'MEDIUM',
+  description text,
+  auto_detected boolean NOT NULL DEFAULT false,
+  reviewed    boolean NOT NULL DEFAULT false,
+  reviewed_by uuid REFERENCES profiles(id),
+  reviewed_at timestamptz,
+  resolution  text,
+  metadata    jsonb,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_risk_events_user ON risk_events(user_id);
+CREATE INDEX idx_risk_events_entity ON risk_events(entity_type, entity_id);
+CREATE INDEX idx_risk_events_unreviewed ON risk_events(created_at DESC) WHERE NOT reviewed;
+```
+
+### 7.18 Migration 018 — Audit
+
+```sql
+-- 018_audit.sql
+
+CREATE TABLE audit_log (
+  id            uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  actor_id      uuid REFERENCES profiles(id),
+  actor_role    user_role,
+  action        text NOT NULL,      -- e.g. 'DEPOSIT_APPROVED'
+  entity_type   text,
+  entity_id     uuid,
+  before_state  jsonb,
+  after_state   jsonb,
+  reason        text,
+  ip_address    inet,
+  user_agent    text,
+  request_id    text,
+  correlation_id uuid,
+  metadata      jsonb,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_audit_actor ON audit_log(actor_id);
+CREATE INDEX idx_audit_entity ON audit_log(entity_type, entity_id);
+CREATE INDEX idx_audit_action ON audit_log(action);
+CREATE INDEX idx_audit_created ON audit_log(created_at DESC);
+
+-- Audit log is append-only; no UPDATE or DELETE allowed via RLS
+```
+
+### 7.19 Migration 019 — Settings
+
+```sql
+-- 019_settings.sql
+
+CREATE TABLE app_settings (
+  key           text PRIMARY KEY,
+  value         jsonb NOT NULL,
+  description   text,
+  category      text NOT NULL DEFAULT 'GENERAL',
+  is_sensitive  boolean NOT NULL DEFAULT false,
+  changed_by    uuid REFERENCES profiles(id),
+  changed_at    timestamptz NOT NULL DEFAULT now(),
+  previous_value jsonb,
+  requires_approval boolean NOT NULL DEFAULT false,
+  approved_by   uuid REFERENCES profiles(id),
+  approved_at   timestamptz
+);
+
+-- Default settings
+INSERT INTO app_settings (key, value, description, category) VALUES
+  ('customer_quote_rate', '91.50', 'INR per USDT charged to customer', 'RATES'),
+  ('agent_settlement_rate', '91.00', 'INR per USDT paid to agent', 'RATES'),
+  ('standard_commission_rate', '1.50', 'Standard agent commission %', 'COMMISSION'),
+  ('trusted_commission_rate', '1.75', 'Trusted agent commission %', 'COMMISSION'),
+  ('premium_commission_rate', '2.00', 'Premium agent commission %', 'COMMISSION'),
+  ('platform_fee_percent', '0.00', 'Customer platform fee %', 'FEES'),
+  ('platform_fee_flat_inr', '0.00', 'Customer flat fee INR', 'FEES'),
+  ('min_deposit_usdt', '10.00', 'Minimum deposit amount USDT', 'LIMITS'),
+  ('max_deposit_usdt', '10000.00', 'Maximum deposit amount USDT', 'LIMITS'),
+  ('min_order_inr', '100.00', 'Minimum order INR', 'LIMITS'),
+  ('max_order_inr', '50000.00', 'Maximum order INR', 'LIMITS'),
+  ('order_expiry_minutes', '10', 'Order expiry in minutes', 'TIMERS'),
+  ('max_agent_active_orders', '3', 'Default max active orders per agent', 'AGENT'),
+  ('deposits_paused', 'false', 'Emergency: pause all deposits', 'EMERGENCY'),
+  ('orders_paused', 'false', 'Emergency: pause new orders', 'EMERGENCY'),
+  ('agent_claims_paused', 'false', 'Emergency: pause agent claims', 'EMERGENCY'),
+  ('withdrawals_paused', 'false', 'Emergency: pause withdrawals', 'EMERGENCY'),
+  ('settlements_paused', 'false', 'Emergency: pause settlements', 'EMERGENCY'),
+  ('global_maintenance', 'false', 'Global maintenance mode', 'MAINTENANCE'),
+  ('customer_maintenance', 'false', 'Customer app maintenance mode', 'MAINTENANCE'),
+  ('agent_maintenance', 'false', 'Agent app maintenance mode', 'MAINTENANCE'),
+  ('telegram_enabled', 'true', 'Enable Telegram notifications', 'TELEGRAM'),
+  ('referrals_enabled', 'true', 'Enable referral system', 'FEATURES'),
+  ('customer_referral_reward_usdt', '1.00', 'Customer referral reward USDT', 'REFERRALS'),
+  ('agent_partner_reward_percent', '5.00', 'Agent partner reward % of commission', 'REFERRALS'),
+  ('usdt_network_primary', '"TRON"', 'Primary USDT deposit network', 'WALLETS'),
+  ('central_usdt_tron_address', '""', 'Central TRON USDT deposit address', 'WALLETS');
+
+-- Setting history
+CREATE TABLE setting_history (
+  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  key         text NOT NULL,
+  old_value   jsonb,
+  new_value   jsonb NOT NULL,
+  changed_by  uuid REFERENCES profiles(id),
+  reason      text,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE feature_flags (
+  key         text PRIMARY KEY,
+  enabled     boolean NOT NULL DEFAULT false,
+  description text,
+  environments text[] DEFAULT '{development}',  -- environments where enabled
+  changed_by  uuid REFERENCES profiles(id),
+  changed_at  timestamptz NOT NULL DEFAULT now()
+);
+
+INSERT INTO feature_flags (key, description, enabled, environments) VALUES
+  ('payment_feature', 'Customer INR payment orders', true, '{development,production}'),
+  ('agent_marketplace', 'Agent order marketplace', true, '{development,production}'),
+  ('referrals', 'Referral system', true, '{development,production}'),
+  ('telegram_notifications', 'Telegram bot notifications', false, '{development}'),
+  ('demo_mode', 'Demo/simulation mode', true, '{development}');
+```
+
+### 7.20 Migration 020 — Reporting Views
+
+```sql
+-- 020_reporting.sql
+
+CREATE VIEW v_platform_metrics AS
+SELECT
+  (SELECT COUNT(*) FROM profiles WHERE role = 'CUSTOMER') as total_customers,
+  (SELECT COUNT(*) FROM profiles WHERE role = 'CUSTOMER' AND kyc_status = 'APPROVED') as kyc_customers,
+  (SELECT COUNT(*) FROM agent_profiles WHERE status = 'ACTIVE') as active_agents,
+  (SELECT COUNT(*) FROM deposits WHERE status = 'CREDITED') as total_deposits,
+  (SELECT COALESCE(SUM(received_amount), 0) FROM deposits WHERE status = 'CREDITED') as total_usdt_deposited,
+  (SELECT COUNT(*) FROM payment_orders WHERE status = 'COMPLETED') as total_orders_completed,
+  (SELECT COALESCE(SUM(inr_amount), 0) FROM payment_orders WHERE status = 'COMPLETED') as total_inr_volume,
+  (SELECT COALESCE(SUM(platform_contribution), 0) FROM payment_orders WHERE status = 'COMPLETED') as total_platform_contribution;
+
+CREATE VIEW v_customer_balances AS
+SELECT
+  p.id as user_id,
+  p.email,
+  p.full_name,
+  COALESCE(ab.available, 0) as available_usdt,
+  COALESCE(ab.reserved, 0) as reserved_usdt,
+  COALESCE(ab.pending, 0) as pending_usdt,
+  COALESCE(ab.total, 0) as total_usdt
+FROM profiles p
+LEFT JOIN ledger_accounts la ON la.user_id = p.id AND la.account_type = 'CUSTOMER_USDT'
+LEFT JOIN account_balances ab ON ab.account_id = la.id
+WHERE p.role = 'CUSTOMER';
+
+CREATE VIEW v_agent_balances AS
+SELECT
+  p.id as user_id,
+  p.email,
+  ap.commission_tier,
+  COALESCE(ab.available, 0) as available_usdt,
+  COALESCE(ab.pending, 0) as pending_usdt,
+  ap.total_usdt_earned
+FROM profiles p
+JOIN agent_profiles ap ON ap.id = p.id
+LEFT JOIN ledger_accounts la ON la.user_id = p.id AND la.account_type = 'AGENT_USDT'
+LEFT JOIN account_balances ab ON ab.account_id = la.id;
+```
+
+### 7.21 RLS Policies
+
+```sql
+-- RLS for profiles
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+
+-- Users can view their own profile
+CREATE POLICY "profiles_own_view" ON profiles
+  FOR SELECT USING (auth.uid() = id);
+
+-- Admins/managers can view all profiles
+CREATE POLICY "profiles_admin_view" ON profiles
+  FOR SELECT USING (
+    (SELECT role FROM profiles WHERE id = auth.uid())
+    IN ('OWNER','SUPER_ADMIN','FINANCE_ADMIN','TREASURY_ADMIN','COMPLIANCE_ADMIN',
+        'OPERATIONS_MANAGER','DEPOSIT_REVIEWER','PAYMENT_REVIEWER','AGENT_MANAGER',
+        'SUPPORT_AGENT','AUDITOR')
+  );
+
+-- Users can update their own profile (limited fields)
+CREATE POLICY "profiles_own_update" ON profiles
+  FOR UPDATE USING (auth.uid() = id)
+  WITH CHECK (auth.uid() = id AND role = (SELECT role FROM profiles WHERE id = auth.uid()));
+
+-- RLS for deposits
+ALTER TABLE deposits ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "deposits_own_view" ON deposits
+  FOR SELECT USING (user_id = auth.uid());
+
+CREATE POLICY "deposits_ops_view" ON deposits
+  FOR SELECT USING (
+    (SELECT role FROM profiles WHERE id = auth.uid())
+    IN ('OWNER','SUPER_ADMIN','FINANCE_ADMIN','TREASURY_ADMIN','OPERATIONS_MANAGER','DEPOSIT_REVIEWER','AUDITOR')
+  );
+
+CREATE POLICY "deposits_own_create" ON deposits
+  FOR INSERT WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "deposits_ops_update" ON deposits
+  FOR UPDATE USING (
+    (SELECT role FROM profiles WHERE id = auth.uid())
+    IN ('OWNER','SUPER_ADMIN','OPERATIONS_MANAGER','DEPOSIT_REVIEWER')
+  );
+
+-- RLS for payment_orders
+ALTER TABLE payment_orders ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "orders_customer_view" ON payment_orders
+  FOR SELECT USING (customer_id = auth.uid());
+
+CREATE POLICY "orders_agent_available" ON payment_orders
+  FOR SELECT USING (
+    status = 'AVAILABLE'
+    AND (SELECT role FROM profiles WHERE id = auth.uid()) = 'AGENT'
+  );
+
+CREATE POLICY "orders_agent_own" ON payment_orders
+  FOR SELECT USING (
+    agent_id = auth.uid()
+    AND (SELECT role FROM profiles WHERE id = auth.uid()) = 'AGENT'
+  );
+
+CREATE POLICY "orders_ops_view" ON payment_orders
+  FOR SELECT USING (
+    (SELECT role FROM profiles WHERE id = auth.uid())
+    IN ('OWNER','SUPER_ADMIN','FINANCE_ADMIN','OPERATIONS_MANAGER','PAYMENT_REVIEWER','AUDITOR')
+  );
+
+-- RLS for ledger_entries (read-only for account owners)
+ALTER TABLE ledger_entries ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "ledger_entries_own_view" ON ledger_entries
+  FOR SELECT USING (
+    account_id IN (
+      SELECT id FROM ledger_accounts WHERE user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "ledger_entries_ops_view" ON ledger_entries
+  FOR SELECT USING (
+    (SELECT role FROM profiles WHERE id = auth.uid())
+    IN ('OWNER','SUPER_ADMIN','FINANCE_ADMIN','TREASURY_ADMIN','AUDITOR')
+  );
+
+-- No direct INSERT/UPDATE/DELETE on ledger_entries from client
+-- All mutations go through server-side functions
+
+-- RLS for notifications
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "notifications_own" ON notifications
+  FOR ALL USING (user_id = auth.uid());
+
+-- RLS for audit_log (append-only)
+ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "audit_log_ops_view" ON audit_log
+  FOR SELECT USING (
+    (SELECT role FROM profiles WHERE id = auth.uid())
+    IN ('OWNER','SUPER_ADMIN','COMPLIANCE_ADMIN','AUDITOR')
+  );
+
+-- No UPDATE or DELETE on audit_log at all
+```
+
+### 7.22 Withdrawal Table
+
+```sql
+CREATE TABLE agent_withdrawals (
+  id                  uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  display_id          text UNIQUE NOT NULL,
+  agent_id            uuid NOT NULL REFERENCES profiles(id),
+  amount_usdt         numeric(38,18) NOT NULL,
+  network             network_type NOT NULL,
+  destination_address text NOT NULL,
+  status              withdrawal_status NOT NULL DEFAULT 'REQUESTED',
+  risk_check_passed   boolean,
+  risk_check_notes    text,
+  approved_by         uuid REFERENCES profiles(id),
+  approved_at         timestamptz,
+  rejected_by         uuid REFERENCES profiles(id),
+  rejected_at         timestamptz,
+  rejection_reason    text,
+  tx_hash             text,
+  paid_at             timestamptz,
+  paid_by             uuid REFERENCES profiles(id),
+  payment_notes       text,
+  ledger_tx_id        uuid REFERENCES ledger_transactions(id),
+  idempotency_key     text UNIQUE,
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  updated_at          timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT withdrawals_amount_positive CHECK (amount_usdt > 0)
+);
+
+CREATE SEQUENCE withdrawal_seq START 400001;
+CREATE TRIGGER withdrawals_display_id_trigger
+  BEFORE INSERT ON agent_withdrawals FOR EACH ROW
+  EXECUTE FUNCTION (
+    SELECT 'WDR-' || nextval('withdrawal_seq')::text
+  );
+```
+
+---
+
+## 8. Authentication & RBAC
+
+### 8.1 Authentication Architecture
+
+Supabase Auth is used for all user authentication.
+
+**Client access rules:**
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (anon key): safe for browser
+- `SUPABASE_SERVICE_ROLE_KEY`: server-only, never in client code, never prefixed `NEXT_PUBLIC_`
+
+**Session model:**
+- Supabase JWTs (short expiry) with refresh tokens
+- Server-side session via `@supabase/ssr` middleware
+- Cookie-based sessions (httpOnly, secure, sameSite=lax)
+- Session stored in encrypted httpOnly cookie
+
+### 8.2 Middleware
+
+```typescript
+// src/middleware.ts
+import { createServerClient } from '@supabase/ssr';
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function middleware(request: NextRequest) {
+  const response = NextResponse.next();
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    { cookies: { /* cookie handlers */ } }
+  );
+
+  const { data: { session } } = await supabase.auth.getSession();
+
+  const path = request.nextUrl.pathname;
+
+  // Route groups
+  if (path.startsWith('/app') && !session) {
+    return NextResponse.redirect(new URL('/login?next=' + path, request.url));
+  }
+  if (path.startsWith('/agent') && !session) {
+    return NextResponse.redirect(new URL('/login?next=' + path, request.url));
+  }
+  if (path.startsWith('/ops') && !session) {
+    return NextResponse.redirect(new URL('/login?next=' + path, request.url));
+  }
+  if (path.startsWith('/admin') && !session) {
+    return NextResponse.redirect(new URL('/login?next=' + path, request.url));
+  }
+
+  // Role verification (fetch profile from DB)
+  if (session && (path.startsWith('/ops') || path.startsWith('/admin'))) {
+    // Fetch role from profiles table using service role client
+    // Redirect if insufficient role
+  }
+
+  return response;
+}
+
+export const config = {
+  matcher: ['/app/:path*', '/agent/:path*', '/ops/:path*', '/admin/:path*'],
+};
+```
+
+### 8.3 Role Permission Matrix
+
+| Permission | CUSTOMER | AGENT | DEPOSIT_REVIEWER | PAYMENT_REVIEWER | OPS_MANAGER | FINANCE_ADMIN | TREASURY_ADMIN | COMPLIANCE_ADMIN | SUPPORT_AGENT | AUDITOR | SUPER_ADMIN | OWNER |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| View own wallet | ✓ | ✓ | — | — | — | — | — | — | — | — | ✓ | ✓ |
+| Create deposit | ✓ | — | — | — | — | — | — | — | — | — | ✓ | ✓ |
+| Approve deposit | — | — | ✓ | — | ✓ | — | — | — | — | — | ✓ | ✓ |
+| Create order | ✓ | — | — | — | — | — | — | — | — | — | ✓ | ✓ |
+| Claim order | — | ✓ | — | — | — | — | — | — | — | — | ✓ | ✓ |
+| Approve payment | — | — | — | ✓ | ✓ | — | — | — | — | — | ✓ | ✓ |
+| Request withdrawal | — | ✓ | — | — | — | — | — | — | — | — | ✓ | ✓ |
+| Approve withdrawal | — | — | — | — | — | ✓ | ✓ | — | — | — | ✓ | ✓ |
+| Pay withdrawal | — | — | — | — | — | — | ✓ | — | — | — | ✓ | ✓ |
+| View treasury | — | — | — | — | — | ✓ | ✓ | — | — | ✓ | ✓ | ✓ |
+| Update rates | — | — | — | — | — | — | ✓ | — | — | — | ✓ | ✓ |
+| View audit log | — | — | — | — | — | — | — | ✓ | — | ✓ | ✓ | ✓ |
+| Manage settings | — | — | — | — | — | — | — | — | — | — | ✓ | ✓ |
+| Emergency controls | — | — | — | — | — | — | — | — | — | — | ✓ | ✓ |
+| Manage agents | — | — | — | — | ✓ | — | — | — | — | — | ✓ | ✓ |
+| Manage users | — | — | — | — | ✓ | — | — | — | — | — | ✓ | ✓ |
+
+### 8.4 Two-Factor Authentication
+
+Roles requiring mandatory 2FA:
+- `OWNER`, `SUPER_ADMIN`, `FINANCE_ADMIN`, `TREASURY_ADMIN`, `COMPLIANCE_ADMIN`, `OPERATIONS_MANAGER`
+
+Roles where 2FA is optional but encouraged:
+- `AGENT`, `CUSTOMER`, all other staff
+
+TOTP implementation via Supabase Auth (backup codes generated, stored hashed).
+
+Critical actions requiring step-up auth (re-enter password/TOTP):
+- Change central wallet address
+- Approve withdrawal > configured threshold
+- Enable/disable emergency controls
+- Change commission/rate settings
+- Grant or revoke admin roles
+
+### 8.5 Login Security
+
+Rate limiting per endpoint:
+- Login: 5 attempts per 15 minutes per IP
+- Registration: 10 per hour per IP
+- Password reset: 3 per hour per email
+
+Login security events trigger:
+1. Audit log entry
+2. In-app security notification
+3. Telegram notification (if connected)
+
+---
+
+## 9. Ledger & Financial Model
+
+### 9.1 Accounting Model
+
+TetherPay uses a **single-currency double-entry ledger** (USDT only on internal accounts, INR tracked as metadata).
+
+Every financial event creates:
+- A `ledger_transaction` (the event descriptor)
+- ≥ 2 `ledger_entries` (debits and credits that net to zero)
+
+**Ledger Accounts:**
+
+| Account Type | Owner | Purpose |
+|---|---|---|
+| `CUSTOMER_USDT` | Customer | Customer available and reserved balance |
+| `AGENT_USDT` | Agent | Agent available and pending balance |
+| `PLATFORM_REVENUE` | Platform | Platform earnings |
+| `PLATFORM_FLOAT` | Platform | Unallocated platform USDT |
+| `PLATFORM_RESERVES` | Platform | Reserved/contingency |
+
+### 9.2 Deposit Credit Flow
+
+```
+Event: Manager approves deposit of 500 USDT
+
+Ledger Transaction:
+  type: DEPOSIT_CREDIT
+  reference_type: DEPOSIT
+  reference_id: <deposit_id>
+
+Ledger Entries:
+  1. CREDIT customer_usdt account +500.000000000000000000
+  2. DEBIT  platform_float account -500.000000000000000000
+     (represents customer liability on platform)
+
+Account Balance Updates:
+  customer.available += 500
+```
+
+### 9.3 Order Reserve Flow
+
+```
+Event: Customer creates confirmed payment order (₹5,000 at ₹91.50/USDT)
+       customer_usdt_debit = 5000/91.50 = 54.6448087 USDT (+ fees)
+
+Ledger Transaction:
+  type: ORDER_RESERVE
+  reference_type: ORDER
+
+Ledger Entries:
+  1. No balance change on platform side
+  2. customer_usdt account: available -54.6448087, reserved +54.6448087
+```
+
+### 9.4 Order Completion & Agent Settlement
+
+```
+Event: Manager approves payment → order completed
+
+Step 1 — Customer debit:
+  ORDER_DEBIT
+  customer_usdt: reserved -54.6448087 (consumed)
+  platform_revenue: +54.6448087
+
+Step 2 — Agent settlement:
+  AGENT_SETTLEMENT_CREDIT
+  agent_usdt: pending +55.4644808
+  platform_revenue: -55.4644808
+
+Step 3 — Commission is included in agent_total_usdt
+```
+
+### 9.5 Agent Withdrawal
+
+```
+Event: Agent requests withdrawal of 55 USDT
+
+Step 1 — Reserve:
+  AGENT_WITHDRAWAL_RESERVE
+  agent_usdt: available -55, reserved +55
+
+Event: Admin approves + executes USDT transfer
+
+Step 2 — Debit:
+  AGENT_WITHDRAWAL_DEBIT
+  agent_usdt: reserved -55 (gone from ledger)
+```
+
+### 9.6 Balance Calculation
+
+Balances are **never directly computed from ledger scan at runtime** (slow).  
+They are maintained in `account_balances` table updated synchronously in database transactions.
+
+Available balance invariant: `available >= 0` enforced by DB constraint.
+
+### 9.7 Financial Invariants (Enforced)
+
+1. **TX hash uniqueness:** Unique index on `deposits(tx_hash)` where credited.
+2. **Order single completion:** Unique index on `agent_settlements(order_id)`.
+3. **Order single claim:** Partial unique index on `payment_orders(agent_id)` for active states.
+4. **Idempotency keys:** Unique on all create/approve operations.
+5. **Balance non-negativity:** DB constraint on `account_balances`.
+6. **Double-entry:** Every ledger transaction must have sum(debits) = sum(credits).
+7. **No direct balance edits:** RLS prevents direct UPDATE on `account_balances`.
+
+---
+
+## 10. State Machines
+
+### 10.1 Deposit State Machine
+
+```
+CREATED ──────────────────────────────────────────┐
+   │                                              │ (customer creates deposit request)
+   ▼                                              │
+TX_SUBMITTED ◄─────────────────────────────────────┘
+   │
+   │ (customer submits tx hash)
+   ▼
+PENDING_VERIFICATION
+   │
+   ├──── [manager: wrong/suspicious] ────► ESCALATED ──► [senior review]
+   │                                              │
+   ├──── [duplicate tx hash] ──────────► DUPLICATE      │
+   │                                              │
+   ├──── [risk system] ─────────────────► RISK_HOLD ◄───┘
+   │
+   ├──── [manager: reject] ────────────► REJECTED (terminal)
+   │
+   └──── [manager: approve] ──────────► VERIFIED
+                                            │
+                                            │ (system credits ledger)
+                                            ▼
+                                         CREDITED (terminal)
+```
+
+**Transitions:**
+
+| From | To | Actor | Validations | Side Effects |
+|---|---|---|---|---|
+| CREATED | TX_SUBMITTED | Customer | deposit exists, status=CREATED | notification sent |
+| TX_SUBMITTED | PENDING_VERIFICATION | System | tx_hash present | ops queue alert |
+| PENDING_VERIFICATION | VERIFIED | Deposit Reviewer | checklist complete, not duplicate | — |
+| VERIFIED | CREDITED | System | auto after verify | ledger credit, notification, Telegram |
+| PENDING_VERIFICATION | REJECTED | Deposit Reviewer | reason required | notification, audit |
+| PENDING_VERIFICATION | ESCALATED | Deposit Reviewer | reason required | senior alert |
+| PENDING_VERIFICATION | RISK_HOLD | System/Manager | risk flag | risk event, admin alert |
+| PENDING_VERIFICATION | DUPLICATE | Reviewer | same tx_hash already credited | audit |
+
+### 10.2 Payment Order State Machine
+
+```
+DRAFT
+  │ (customer saves incomplete order)
+  ▼
+QUOTE_CREATED
+  │ (rate quoted, expiry set)
+  ▼
+CONFIRMED
+  │ (customer confirms intent)
+  ▼
+FUNDS_RESERVED
+  │ (USDT reserved from customer balance)
+  ▼
+AVAILABLE ◄──────────────────── (re-enter if agent times out or cancels)
+  │
+  │ [agent claims]
+  ▼
+ASSIGNED
+  │
+  │ [agent submits payment]
+  ▼
+PAYMENT_SUBMITTED
+  │
+  ▼
+MANAGER_REVIEW
+  │
+  ├─── [reject] ──────────────► REJECTED ──► (funds released to customer)
+  │
+  ├─── [dispute] ─────────────► DISPUTED ──► dispute workflow
+  │
+  └─── [approve] ─────────────► APPROVED
+                                    │
+                                    ▼
+                                 COMPLETED
+                                    │
+                                    ▼
+                            AGENT_SETTLEMENT_POSTED
+                                    │
+                                    ▼
+                            COMMISSION_POSTED (terminal)
+
+AVAILABLE/ASSIGNED + [timer expires] ──► EXPIRED ──► (funds released)
+CONFIRMED/FUNDS_RESERVED + [customer cancels] ──► CANCELLED ──► (funds released)
+```
+
+**Side Effects Table:**
+
+| Transition | Customer Ledger | Agent Ledger | Notifications | Telegram |
+|---|---|---|---|---|
+| → FUNDS_RESERVED | available→reserved | — | Order confirmed | — |
+| → AVAILABLE | — | — | Order in marketplace | agent broadcast |
+| → ASSIGNED | — | — | Agent assigned | agent notified |
+| → PAYMENT_SUBMITTED | — | — | Payment submitted | — |
+| → COMPLETED | — | — | Payment completed | customer, agent |
+| → AGENT_SETTLEMENT_POSTED | — | pending credit | Settlement pending | agent |
+| → COMMISSION_POSTED | — | pending→available | Commission credited | agent |
+| → EXPIRED | reserved→available | — | Order expired | — |
+| → REJECTED | reserved→available | — | Payment rejected | customer |
+| → CANCELLED | reserved→available | — | Cancelled | — |
+
+### 10.3 Agent Withdrawal State Machine
+
+```
+REQUESTED
+  │
+  ▼
+RISK_CHECK ──── [auto/manual flag] ──► HELD (manual review)
+  │
+  │ [passes]
+  ▼
+ADMIN_REVIEW
+  │
+  ├─── [reject] ─────────────► REJECTED (reserved→available returned)
+  │
+  └─── [approve] ────────────► APPROVED
+                                    │
+                                    ▼
+                                PROCESSING (treasury initiates tx)
+                                    │
+                                    │ (tx hash recorded)
+                                    ▼
+                                  PAID (terminal)
+```
+
+---
+
+## 11. Financial Formulas
+
+All formulas use `decimal.js` in application code and `numeric(38,18)` in database.  
+Rounding: `HALF_UP` to 8 decimal places for USDT, 2 for INR.
+
+### 11.1 Customer Quote
+
+```
+inr_amount             = customer-specified INR
+platform_fee_percent   = settings.platform_fee_percent   (e.g. 0.00%)
+platform_fee_flat_inr  = settings.platform_fee_flat_inr  (e.g. 0.00)
+customer_rate          = settings.customer_quote_rate     (e.g. 91.50)
+
+platform_fee_inr       = (inr_amount × platform_fee_percent / 100) + platform_fee_flat_inr
+total_inr              = inr_amount + platform_fee_inr
+customer_usdt_debit    = total_inr / customer_rate
+```
+
+**Example:**
+```
+inr_amount           = 5000
+platform_fee_percent = 0%
+platform_fee_flat    = 0
+total_inr            = 5000
+customer_rate        = 91.50
+customer_usdt_debit  = 5000 / 91.50 = 54.64480874 USDT
+```
+
+### 11.2 Agent Settlement
+
+```
+agent_rate         = settings.agent_settlement_rate  (e.g. 91.00)
+commission_rate    = agent tier rate                 (e.g. 1.50%)
+
+base_usdt          = inr_paid / agent_rate
+commission_inr     = inr_paid × commission_rate / 100
+commission_usdt    = commission_inr / agent_rate
+agent_total_usdt   = base_usdt + commission_usdt
+```
+
+**Example (₹5,000 paid, rate 91.00, commission 1.50%):**
+```
+base_usdt          = 5000 / 91.00   = 54.94505495 USDT
+commission_inr     = 5000 × 0.015  = 75.00 INR
+commission_usdt    = 75 / 91.00    = 0.82417582 USDT
+agent_total_usdt   = 55.76923077 USDT
+```
+
+### 11.3 Platform Contribution per Order
+
+```
+platform_contribution = customer_usdt_debit - agent_total_usdt - referral_cost_usdt
+
+referral_cost_usdt = (if qualifying referral reward applies) reward_usdt else 0
+```
+
+**Example:**
+```
+customer_usdt_debit   = 54.64480874
+agent_total_usdt      = 55.76923077   ← NOTE: contribution can be negative!
+referral_cost_usdt    = 0
+
+platform_contribution = 54.64480874 - 55.76923077 = -1.12442203 USDT  ← LOSS
+```
+
+> ⚠️ **Warning:** The admin profitability calculator must highlight when rate configuration produces negative platform contribution. This is not blocked by the system but requires explicit acknowledgement.
+
+**Correct configuration example (customer_rate > agent_rate + commission spread):**
+```
+customer_rate = 91.50, agent_rate = 90.00, commission 1.50%
+customer_usdt_debit = 5000 / 91.50 = 54.64480874
+agent_total_usdt    = (5000/90) + (75/90) = 55.5556 + 0.8333 = 56.3889  ← still loss at this spread
+
+For profit: customer_rate must exceed agent_rate × (1 + commission%) sufficiently
+```
+
+The admin profitability preview tool must model this explicitly with live values.
+
+### 11.4 Referral Reward (Customer)
+
+```
+reward_usdt = settings.customer_referral_reward_usdt   (e.g. 1.00 USDT)
+Trigger:      first completed payment order by referred customer
+```
+
+### 11.5 Agent Partner Reward
+
+```
+partner_reward_percent = settings.agent_partner_reward_percent  (e.g. 5%)
+reward_usdt            = commission_usdt × partner_reward_percent / 100
+Trigger:               each commission earned by referred agent
+```
+
+### 11.6 Rounding Rules
+
+| Amount Type | Precision | Rounding |
+|---|---|---|
+| USDT amounts (display) | 4 dp | HALF_UP |
+| USDT amounts (ledger) | 18 dp | exact |
+| USDT amounts (settle) | 8 dp | HALF_UP |
+| INR amounts | 2 dp | HALF_UP |
+| Rates | 8 dp | exact |
+| Percentages | 4 dp | exact |
+
+---
+
+## 12. API Contracts
+
+All API routes live under `/api/`. All financial mutations are server-side only.
+
+### 12.1 Authentication Headers
+
+```
+Authorization: Bearer <supabase_jwt>
+Content-Type: application/json
+X-Idempotency-Key: <uuid>   (required for all mutation endpoints)
+```
+
+### 12.2 Deposits API
+
+#### `POST /api/deposits` — Create deposit request
+
+**Auth:** Customer  
+**Body:**
+```json
+{
+  "network": "TRON",
+  "expected_amount": "500.00",
+  "idempotency_key": "uuid-v4"
+}
+```
+**Response 201:**
+```json
+{
+  "id": "uuid",
+  "display_id": "DEP-128821",
+  "deposit_address": "TXxx...",
+  "network": "TRON",
+  "expected_amount": "500.00",
+  "status": "CREATED",
+  "created_at": "ISO8601"
+}
+```
+**Errors:** 400 (invalid amount), 403 (deposits paused or frozen), 409 (idempotency conflict)  
+**Audit:** `DEPOSIT_CREATED`  
+**Notification:** None (created state)
+
+---
+
+#### `POST /api/deposits/:id/submit` — Submit TX hash
+
+**Auth:** Customer (own deposit)  
+**Body:**
+```json
+{
+  "tx_hash": "abc123...",
+  "from_address": "TXxx...",
+  "idempotency_key": "uuid-v4"
+}
+```
+**Validation:**
+- Deposit status must be `CREATED`
+- `tx_hash` format validated per network
+- Check `tx_hash` not already in `deposits` table (credited)
+
+**Response 200:** Updated deposit  
+**Realtime:** `DEPOSIT_SUBMITTED` event  
+**Notification:** Ops team alerted  
+**Audit:** `DEPOSIT_TX_SUBMITTED`
+
+---
+
+#### `POST /api/deposits/:id/approve` — Approve deposit
+
+**Auth:** DEPOSIT_REVIEWER, OPERATIONS_MANAGER  
+**Body:**
+```json
+{
+  "received_amount": "500.00",
+  "checklist_confirmed": true,
+  "notes": "Verified on Tronscan",
+  "idempotency_key": "uuid-v4"
+}
+```
+**Validation:**
+- Status must be `PENDING_VERIFICATION`
+- `received_amount` > 0
+- `checklist_confirmed` must be `true`
+- `tx_hash` not in CREDITED deposits (idempotency check)
+
+**Transaction (atomic):**
+1. Update deposit status → `CREDITED`
+2. Create ledger transaction + entries
+3. Update customer `account_balances`
+4. Create audit log entry
+
+**Response 200:** Updated deposit + new balance  
+**Realtime:** `DEPOSIT_CREDITED`  
+**Notification:** Customer in-app + Telegram  
+**Audit:** `DEPOSIT_APPROVED`
+
+---
+
+#### `POST /api/deposits/:id/reject`
+
+**Auth:** DEPOSIT_REVIEWER, OPERATIONS_MANAGER  
+**Body:**
+```json
+{
+  "reason": "Wrong network — ERC-20 sent to TRC-20 address",
+  "idempotency_key": "uuid-v4"
+}
+```
+**Response 200:** Updated deposit  
+**Notification:** Customer in-app + Telegram  
+**Audit:** `DEPOSIT_REJECTED`
+
+---
+
+### 12.3 Payment Orders API
+
+#### `POST /api/quotes` — Get payment quote
+
+**Auth:** Customer  
+**Body:**
+```json
+{
+  "inr_amount": "5000",
+  "recipient_upi_id": "example@upi",
+  "recipient_name": "John Doe",
+  "idempotency_key": "uuid-v4"
+}
+```
+**Validation:**
+- `inr_amount` between `min_order_inr` and `max_order_inr`
+- Customer balance sufficient
+- Orders not paused
+- Customer not frozen
+
+**Response 200:**
+```json
+{
+  "quote_id": "uuid",
+  "inr_amount": "5000.00",
+  "platform_fee_inr": "0.00",
+  "total_inr": "5000.00",
+  "customer_rate": "91.50",
+  "customer_usdt_debit": "54.64480874",
+  "available_balance": "100.00000000",
+  "remaining_after": "45.35519126",
+  "expires_at": "ISO8601",
+  "recipient_upi_id": "example@upi",
+  "recipient_name": "John Doe"
+}
+```
+**Note:** Quote does not reserve funds yet.
+
+---
+
+#### `POST /api/orders` — Confirm order (reserves funds)
+
+**Auth:** Customer  
+**Body:**
+```json
+{
+  "quote_id": "uuid",
+  "idempotency_key": "uuid-v4"
+}
+```
+**Transaction (atomic):**
+1. Validate quote not expired
+2. Validate customer balance still sufficient
+3. Create order record (status: FUNDS_RESERVED)
+4. Create ledger reserve entries
+5. Set order expiry timer
+
+**Response 201:** Order object  
+**Realtime:** `ORDER_CREATED` → `ORDER_RESERVED` → `ORDER_AVAILABLE`  
+**Audit:** `ORDER_CREATED`
+
+---
+
+#### `POST /api/orders/:id/claim` — Agent claims order
+
+**Auth:** AGENT (active, onboarding complete)  
+**Body:**
+```json
+{ "idempotency_key": "uuid-v4" }
+```
+**Validation:**
+- Order status must be `AVAILABLE`
+- Agent status must be `ACTIVE`
+- Agent not at max active orders
+- Agent claims paused check
+- **Atomic:** `UPDATE payment_orders SET status='ASSIGNED', agent_id=$1 WHERE id=$2 AND status='AVAILABLE'` — returns 0 rows if already claimed
+
+**Response 200:** Order with assignment details  
+**Response 409:** "Order no longer available"  
+**Realtime:** `ORDER_ASSIGNED`  
+**Notification:** Customer, agent  
+**Audit:** `ORDER_CLAIMED`
+
+---
+
+#### `POST /api/orders/:id/payment` — Agent submits payment proof
+
+**Auth:** AGENT (own order)  
+**Body (multipart/form-data):**
+```
+agent_payment_ref: "UTR12345678901"
+agent_payment_time: "ISO8601"
+agent_payment_notes: "Paid via GPay"
+proof: <file upload, optional>
+idempotency_key: "uuid"
+```
+**Validation:**
+- Order status must be `ASSIGNED`
+- Agent must be order's assigned agent
+- Order not expired
+- File: image/PDF, max 5MB
+
+**Response 200:** Updated order  
+**Realtime:** `ORDER_PAYMENT_SUBMITTED`  
+**Notification:** Manager alert  
+**Audit:** `PAYMENT_SUBMITTED`
+
+---
+
+#### `POST /api/orders/:id/approve` — Manager approves payment
+
+**Auth:** PAYMENT_REVIEWER, OPERATIONS_MANAGER  
+**Body:**
+```json
+{
+  "checklist_confirmed": true,
+  "notes": "UTR verified via bank statement",
+  "idempotency_key": "uuid-v4"
+}
+```
+**Transaction (atomic):**
+1. Validate order status = `PAYMENT_SUBMITTED` or `MANAGER_REVIEW`
+2. Update order → `APPROVED` → `COMPLETED`
+3. Debit customer reserved balance
+4. Credit agent pending balance
+5. Create settlement record
+6. Create commission record
+7. Post agent settlement ledger entries
+8. Process referral reward if applicable
+9. Update order → `AGENT_SETTLEMENT_POSTED` → `COMMISSION_POSTED`
+
+**Response 200:** Completed order + settlement  
+**Realtime:** `ORDER_COMPLETED`, `AGENT_SETTLEMENT_PENDING`  
+**Notification:** Customer (payment confirmed), Agent (settlement pending review)  
+**Audit:** `PAYMENT_APPROVED`, `SETTLEMENT_POSTED`
+
+---
+
+#### `POST /api/orders/:id/reject`
+
+**Auth:** PAYMENT_REVIEWER, OPERATIONS_MANAGER  
+**Body:**
+```json
+{
+  "reason": "UTR not verifiable",
+  "idempotency_key": "uuid-v4"
+}
+```
+**Transaction (atomic):**
+1. Update order → `REJECTED`
+2. Release customer reserved funds → available
+3. Order re-enters marketplace or refunds
+
+**Audit:** `PAYMENT_REJECTED`
+
+---
+
+### 12.4 Withdrawals API
+
+#### `POST /api/agent/withdrawals` — Request withdrawal
+
+**Auth:** AGENT  
+**Body:**
+```json
+{
+  "amount_usdt": "55.00",
+  "network": "TRON",
+  "destination_address": "TXxx...",
+  "idempotency_key": "uuid-v4"
+}
+```
+**Validation:**
+- Agent available balance >= amount_usdt
+- Withdrawals not paused
+- Valid TRON address format
+- Within daily/single withdrawal limits
+
+**Transaction (atomic):**
+1. Create withdrawal record
+2. Reserve agent balance
+
+**Response 201:** Withdrawal object  
+**Notification:** Agent confirmation, Admin alert  
+**Audit:** `WITHDRAWAL_REQUESTED`
+
+---
+
+#### `POST /api/agent/withdrawals/:id/approve`
+
+**Auth:** FINANCE_ADMIN, TREASURY_ADMIN  
+**Body:**
+```json
+{ "notes": "Verified", "idempotency_key": "uuid-v4" }
+```
+
+---
+
+#### `POST /api/agent/withdrawals/:id/pay` — Record payment
+
+**Auth:** TREASURY_ADMIN  
+**Body:**
+```json
+{
+  "tx_hash": "abc123...",
+  "notes": "Sent via TronLink",
+  "idempotency_key": "uuid-v4"
+}
+```
+**Transaction (atomic):**
+1. Update withdrawal → `PAID`
+2. Debit agent reserved balance
+
+---
+
+### 12.5 Telegram API
+
+#### `POST /api/telegram/link` — Generate link token
+
+**Auth:** Any authenticated user  
+**Body:** `{}`  
+**Response:**
+```json
+{
+  "link_url": "https://t.me/YourBot?start=TOKEN",
+  "token": "abc123",
+  "expires_at": "ISO8601"
+}
+```
+
+---
+
+#### `POST /api/telegram/webhook` — Receive Telegram updates
+
+**Auth:** Webhook secret header validation (`X-Telegram-Bot-Api-Secret-Token`)  
+**Body:** Telegram Update object  
+**Validation:**
+- Secret header must match `TELEGRAM_WEBHOOK_SECRET`
+- `update_id` uniqueness check (idempotency)
+- Rate limit: 100/min per IP
+
+---
+
+### 12.6 Health Check
+
+#### `GET /api/health`
+
+**Auth:** None  
+**Response 200:**
+```json
+{
+  "status": "ok",
+  "timestamp": "ISO8601",
+  "services": {
+    "database": "ok",
+    "realtime": "ok"
+  }
+}
+```
+
+---
+
+## 13. Public Website Specification
+
+### 13.1 Route: `/` — Homepage
+
+**Layout:** Full-width hero, features, how-it-works preview, CTA  
+**Components:**
+- Hero: "Earn in USDT. Spend in INR." + primary CTA buttons
+- Features grid: Deposit USDT / Create Payment / Settle Instantly
+- How it works: 3-step visual
+- Agent CTA block
+- Footer with legal links
+
+**Mobile:** Single column, sticky top nav with hamburger  
+**Desktop:** Full nav bar, wider hero
+
+### 13.2 Route: `/how-it-works`
+
+Step-by-step visual explanation of the full customer → agent → settlement flow.
+
+### 13.3 Route: `/fees`
+
+Table of current fees, rates, commissions.  
+Note: "Rates are subject to change. Snapshot rates are locked at order creation."
+
+### 13.4 Route: `/agents`
+
+Agent recruitment page.  
+- How agents work
+- Eligibility requirements
+- Earnings calculator (illustrative, not guaranteed)
+- Apply / Register CTA
+
+### 13.5 Route: `/status`
+
+Service health display.  
+Components displayed:
+```
+Customer App        ● Operational
+Agent Portal        ● Operational
+Operations Portal   ● Operational
+Database            ● Operational
+Telegram Bot        ● Operational
+```
+
+Status fetched from `/api/health`.  
+No manual fake-green status — either real or "checking..."
+
+### 13.6 Route: `/login`
+
+Email/password form.  
+- Supabase Auth sign-in
+- "Forgot password" link → `/reset-password`
+- Role-based redirect after login:
+  - CUSTOMER → `/app/dashboard`
+  - AGENT → `/agent/dashboard`
+  - OPERATIONS_MANAGER + → `/ops`
+  - SUPER_ADMIN + → `/admin`
+
+### 13.7 Route: `/register`
+
+Customer and agent registration.  
+Fields: full name, email, password, referral code (optional)  
+Email verification required before dashboard access.
+
+### 13.8 Legal Pages
+
+All legal pages are static content pages with professional placeholder structure.
+
+Each requires **LEGAL REVIEW REQUIRED** blocks for jurisdiction-specific clauses.
+
+| Route | Document | Key Sections |
+|---|---|---|
+| `/terms` | Terms of Service | Account, Payments, Prohibited Use, Termination |
+| `/privacy` | Privacy Policy | Data Collected, Use, Retention, Rights, Contact |
+| `/cookies` | Cookie Policy | Types, Usage, Consent |
+| `/risk-disclosure` | Risk Disclosure | VDA risks, Rate risk, Platform risk |
+| `/acceptable-use` | Acceptable Use | Prohibited activities |
+| `/aml-policy` | AML/KYC Policy | **LEGAL REVIEW REQUIRED** |
+| `/kyc-policy` | KYC Policy | Document requirements, process |
+| `/referral-terms` | Referral Terms | Eligibility, rewards, fraud |
+| `/agent-terms` | Agent Terms | Obligations, commission, suspension |
+| `/payment-terms` | Payment Terms | Order flow, settlement, timers |
+| `/refund-policy` | Refund Policy | When refunds apply |
+| `/complaints` | Complaints | Process, timeline, escalation |
+| `/law-enforcement` | Law Enforcement | Request process, contact |
+
+---
+
+## 14. Customer App Specification
+
+### 14.1 Layout
+
+**Mobile navigation (bottom tab bar):**
+```
+[Home] [Pay] [Activity] [Wallet] [More]
+```
+
+**Desktop navigation (left sidebar):**
+```
+Dashboard
+Pay
+Activity
+Wallet
+Referrals
+Notifications
+Support
+Profile / Settings
+```
+
+**Header:** TetherPay logo + notification bell + avatar menu
+
+### 14.2 Route: `/app/dashboard`
+
+**Purpose:** Overview of balance and recent activity  
+**Components:**
+- Balance card: Available USDT (large), Reserved USDT (small)
+- Quick action buttons: [Deposit] [Pay] [Activity]
+- Recent orders list (last 5)
+- Pending deposits list
+
+**Mobile layout:**
+- Balance card full width, rounded-2xl, glass surface
+- Quick actions 3-column icon grid
+- Scrollable list below
+
+**Desktop layout:**
+- Left: Balance + quick actions
+- Right: Recent orders table
+
+**Loading:** Skeleton cards  
+**Empty:** No orders yet — [Make a payment] button  
+**Error:** "Could not load balance. Your funds are safe." with retry
+
+**Realtime:** Subscribes to `ORDER_*` and `DEPOSIT_*` events for this user
+
+**Acceptance Criteria:**
+- Balance reflects ledger state, not stale cache
+- Reserved balance shown separately
+- All amounts rendered with 4 decimal places (USDT)
+
+---
+
+### 14.3 Route: `/app/wallet/deposit`
+
+**Purpose:** Initiate a USDT deposit  
+**Steps:**
+1. Select network (TRON default, others configurable)
+2. Enter expected amount (validated against min/max settings)
+3. Show central wallet deposit address + QR code
+4. "I've sent the USDT" button → proceed to hash submission
+
+**Components:**
+- NetworkSelector (dropdown/chips)
+- AmountInput with min/max display
+- DepositAddressCard (address + copy button + QR)
+- Important notices: correct network, correct token warnings
+
+**Validation:**
+- Amount ≥ min_deposit_usdt and ≤ max_deposit_usdt
+- Cannot submit if deposits paused
+
+**Mobile:** Full-screen steps with sticky "Continue" button  
+**Desktop:** 2-column card layout
+
+---
+
+### 14.4 Route: `/app/wallet/deposit/[id]`
+
+**Purpose:** Track specific deposit  
+**Components:**
+- StatusBadge (CREATED / TX_SUBMITTED / PENDING_VERIFICATION / CREDITED / REJECTED)
+- TX hash input + submit (if status = CREATED)
+- Timeline of state changes
+- Amount, network, expected vs received
+- If CREDITED: new balance shown
+
+**TX Hash Submission:**
+- Field: paste TX hash from blockchain explorer
+- Validate format per network
+- Submit → status becomes TX_SUBMITTED
+- Idempotent: re-submitting same hash shows "already submitted"
+
+**Realtime:** Subscribes to deposit row changes → updates status live
+
+---
+
+### 14.5 Route: `/app/pay` — Payment initiation hub
+
+**Purpose:** Choose payment method  
+**Options:**
+- [Scan QR] → `/app/pay/qr`
+- [Enter UPI ID manually] → `/app/pay/manual`
+
+**Balance check:** Show available balance prominently.  
+If balance zero → show "Deposit USDT first" empty state.
+
+---
+
+### 14.6 Route: `/app/pay/qr`
+
+**Purpose:** Camera-based UPI QR scanner  
+**Components:**
+- Camera view (full screen on mobile)
+- QR overlay guide frame
+- "Upload QR image" fallback for devices without camera
+- Permission request handling
+
+**Flow after scan:**
+1. Parse UPI QR payload
+2. Extract: UPI ID, name, amount (if present), ref
+3. Show parsed recipient confirmation screen
+4. If amount in QR → pre-fill (editable by customer)
+5. Proceed to `/app/pay/review`
+
+**Supported QR format:** `upi://pay?pa=...&pn=...&am=...`  
+**Unsupported:** Non-UPI QR shows friendly error
+
+---
+
+### 14.7 Route: `/app/pay/manual`
+
+**Purpose:** Manual UPI ID entry  
+**Form:**
+- UPI ID field (pattern: `name@bank`)
+- Recipient name (optional, for display)
+- Amount (INR)
+
+**Validation:**
+- UPI ID format check (regex)
+- Amount within limits
+
+**Proceed:** → `/app/pay/review`
+
+---
+
+### 14.8 Route: `/app/pay/review`
+
+**Purpose:** Order confirmation with quote  
+**Components:**
+- RecipientCard: UPI ID, name, avatar/icon
+- AmountBreakdown:
+  - INR amount
+  - Platform fee (if any)
+  - Total INR
+  - Rate: ₹91.50 / USDT
+  - USDT debit: 54.6448 USDT
+  - Available balance: 100.0000 USDT
+  - After this payment: 45.3552 USDT
+- CountdownTimer: Quote expires in 04:52
+- [Confirm Payment] button
+- [Cancel] link
+
+**Quote expiry behavior:**
+- Timer counts down (backend-anchored expiry)
+- At zero: "Quote expired" → [Get new quote] refreshes
+
+**Confirmation:** Creates order, reserves funds, navigates to order tracking
+
+---
+
+### 14.9 Route: `/app/orders/[id]`
+
+**Purpose:** Live order status tracking  
+**Components:**
+- OrderTimeline (stepper):
+  - ✅ Order created
+  - ✅ Funds reserved
+  - ⏳ Waiting for payment agent
+  - ... Payment being made
+  - ... Verifying payment
+  - ✅ Payment confirmed
+- CountdownTimer (if AVAILABLE/ASSIGNED)
+- Recipient UPI ID, amount
+- Status badge
+- [Cancel] if cancellable states
+
+**Realtime:** Live updates on order status changes  
+**On COMPLETED:** Confetti animation (reduced motion: none) + Receipt link
+
+---
+
+### 14.10 Route: `/app/pay/success`
+
+Completion screen after order confirmed.  
+- "Payment Successful" header
+- INR amount sent, recipient, timestamp
+- USDT deducted, new balance
+- [View Receipt] → downloadable PDF
+- [Make another payment]
+- [Go to dashboard]
+
+---
+
+### 14.11 Route: `/app/referrals`
+
+**Components:**
+- Referral code display + copy button
+- Referral link + copy + share
+- Reward info: "Earn X USDT per qualifying referral"
+- Stats: Total referred, pending rewards, credited rewards
+- Referral list (who signed up with your code)
+
+---
+
+### 14.12 Route: `/app/security`
+
+**Components:**
+- Password change form
+- 2FA enable/disable (TOTP with QR setup)
+- Active sessions list with [Revoke] actions
+- Security event log (last 10 events)
+- Telegram link status + link/unlink
+
+---
+
+### 14.13 All Customer Routes — State Requirements
+
+Every customer page must handle:
+
+| State | Behavior |
+|---|---|
+| `loading` | Skeleton components matching page layout |
+| `loaded` | Normal content |
+| `empty` | Designed empty state with CTA |
+| `error` | "Something went wrong. Your balance is safe." + retry |
+| `offline` | "Reconnecting..." banner, non-blocking |
+| `session_expired` | Redirect to login with return URL |
+| `maintenance` | Maintenance page |
+| `frozen` | "Your account is temporarily restricted. Contact support." |
+
+---
+
+## 15. Agent App Specification
+
+### 15.1 Layout
+
+**Mobile navigation (bottom tab bar):**
+```
+[Orders] [Active] [Wallet] [Partners] [More]
+```
+
+### 15.2 Route: `/agent/onboarding`
+
+Multi-step onboarding flow. Agent cannot access main app until complete.
+
+**Steps:**
+
+1. **Profile** (`/agent/onboarding/profile`)
+   - Full name, display name, phone number
+   - Profile photo upload (optional)
+
+2. **Verification** (`/agent/onboarding/verification`)
+   - Government ID upload (PAN/Aadhaar)
+   - Selfie upload
+   - Submitted for review (not instant)
+
+3. **Payment Channel** (`/agent/onboarding/payment-channel`)
+   - UPI ID entry
+   - Verify via ₹1 test payment (or admin verification)
+   - Bank account details (optional, for records)
+
+4. **Agreement** (`/agent/onboarding/agreement`)
+   - Display Agent Terms
+   - Checkbox: "I have read and agree"
+   - Digital signature (timestamp + IP)
+
+5. **Training** (`/agent/onboarding/training`)
+   - Required modules before activation
+   - Each module: read content → acknowledge → mark complete
+   - Progress saved per module
+
+**After completion:** Status → `UNDER_REVIEW` → Admin activates → `ACTIVE`
+
+---
+
+### 15.3 Route: `/agent/orders`
+
+**Purpose:** Browse available orders  
+**Components:**
+- OrderCard list: INR amount, estimated USDT, commission, timer countdown
+- Filter: amount range, network
+- Sort: newest, amount
+- [Claim] button on each card
+
+**Realtime:** New orders appear instantly via Supabase Realtime  
+**Concurrency:** Claim is atomic — if claimed by another agent: "Order no longer available" toast
+
+**Empty:** "No orders available right now. We'll notify you when new orders arrive."
+
+---
+
+### 15.4 Route: `/agent/orders/[id]`
+
+**Purpose:** Active order execution view  
+**Components:**
+- CountdownTimer (must pay before expiry)
+- Recipient: UPI ID (shown clearly)
+- Amount: ₹5,000 (large, prominent)
+- Instructions: "Pay exactly this amount to the UPI ID above"
+- Payment submission form:
+  - UTR/Reference number (required)
+  - Payment time
+  - Notes (optional)
+  - Screenshot upload (optional)
+- [Submit Payment] button (large, sticky on mobile)
+
+**After submit:** Status → PAYMENT_SUBMITTED, awaiting manager review  
+**Timer behavior:** If timer expires while on this page → warning modal → cannot submit  
+**Acceptance Criteria:**
+- Agent cannot submit after expiry
+- UTR field required, min 12 chars, digits only
+- Proof upload: jpg/png/pdf, max 5MB
+
+---
+
+### 15.5 Route: `/agent/wallet`
+
+**Components:**
+- AvailableBalance card (large)
+- PendingBalance card (settlements awaiting approval)
+- [Request Withdrawal] button
+- Recent activity list
+
+---
+
+### 15.6 Route: `/agent/withdraw`
+
+**Purpose:** Request USDT withdrawal  
+**Form:**
+- Amount (numeric, validated against available balance)
+- Network (TRON default)
+- Destination USDT address
+- Confirm: "I confirm this is my USDT wallet address"
+
+**Validation:**
+- Amount ≤ available balance
+- TRON address format validation
+- Withdrawal limits from settings
+
+---
+
+### 15.7 Route: `/agent/earnings`
+
+**Components:**
+- EarningsSummary: total earned, this month, this week
+- CommissionBreakdown: per order
+- Settlement history table
+
+---
+
+### 15.8 Route: `/agent/partners`
+
+**Purpose:** Agent referral partner program  
+**Components:**
+- Partner referral code + link
+- Stats: referred agents, active partners, partner commissions earned
+- Partner list table: agent name, joined date, orders, commissions, your share
+
+---
+
+### 15.9 Agent Training Modules
+
+| Module ID | Title | Required |
+|---|---|---|
+| `intro` | Introduction to TetherPay | ✓ |
+| `how-it-works` | How TetherPay Works | ✓ |
+| `eligibility` | Agent Eligibility | ✓ |
+| `payment-rules` | Payment Channel Rules | ✓ |
+| `finding-orders` | Finding Orders | ✓ |
+| `accepting-orders` | Accepting Orders | ✓ |
+| `making-payments` | Making Payments | ✓ |
+| `submitting-proof` | Submitting Payment Proof | ✓ |
+| `timers` | Order Timers | ✓ |
+| `settlement` | Settlement & Commission | ✓ |
+| `withdrawals` | USDT Withdrawals | ✓ |
+| `disputes` | Disputes | ✓ |
+| `security` | Account Security | ✓ |
+| `prohibited` | Prohibited Behavior | ✓ |
+
+Each module: markdown content page + acknowledgement checkbox + completion record.
+
+---
+
+## 16. Manager Portal Specification
+
+### 16.1 Layout
+
+**Mobile (bottom tab bar):**
+```
+[Queues] [Orders] [Users] [Alerts] [More]
+```
+
+**Desktop:** Sidebar with queue counts, density-optimized tables.
+
+### 16.2 Route: `/ops` — Manager Dashboard
+
+**Components:**
+- KPI cards: Pending deposits, Pending payments, Open disputes, Active orders
+- Priority queue list
+- Recent activity feed
+- Alerts panel
+
+**Realtime:** All queue counts update live.
+
+---
+
+### 16.3 Route: `/ops/deposits`
+
+**Purpose:** Deposit verification queue  
+**Filters:** Status, network, amount range, date range  
+**Sort:** Oldest first (default)  
+**Search:** Deposit ID, TX hash, user ID/email
+
+**Mobile layout:** Card list. Each card:
+- User email (truncated)
+- Amount + network
+- Submitted time
+- Status badge
+- [Review] button
+
+**Desktop layout:** Dense table with same data + actions
+
+**Realtime:** New submissions appear at top with subtle highlight
+
+---
+
+### 16.4 Route: `/ops/deposits/[id]`
+
+**Purpose:** Deposit verification detail  
+**Components:**
+- DepositSummary: amount, network, user, TX hash
+- Blockchain link: "View on [Tronscan/Etherscan]" → opens in new tab
+- VerificationChecklist (all must be checked before approving):
+  ```
+  ☐ Correct network (TRON TRC-20)
+  ☐ Correct token (USDT)
+  ☐ Correct destination address (matches our central wallet)
+  ☐ Amount matches: received = expected ± tolerance
+  ☐ Transaction confirmed on blockchain
+  ☐ TX hash not previously credited
+  ```
+- Amount override field (if received differs from expected)
+- Notes field
+- [Approve] [Reject] [Escalate] buttons
+- Previous reviewer notes
+
+**Mobile:** Full-screen detail, sticky action buttons at bottom  
+**Approve:** Requires all checklist items checked  
+**Reject:** Requires reason  
+**Double-approval protection:** Second submission returns "already processed"
+
+---
+
+### 16.5 Route: `/ops/payments/[id]`
+
+**Purpose:** Payment verification detail  
+**Components:**
+- OrderSummary: order ID, customer (anonymized), recipient UPI ID, INR amount
+- AgentSubmission: UTR, payment time, notes, proof image/PDF viewer
+- PaymentChecklist:
+  ```
+  ☐ Correct recipient UPI ID verified
+  ☐ Correct amount paid
+  ☐ Payment reference/UTR valid format
+  ☐ Evidence reviewed (if provided)
+  ☐ No duplicate settlement for this order
+  ```
+- [Approve] [Reject] [Investigate/Dispute] buttons
+
+**Evidence viewer:** Inline image display, PDF viewer, download option  
+**Dispute:** Creates dispute record, order → DISPUTED state
+
+---
+
+### 16.6 Route: `/ops/users/[id]`
+
+**Purpose:** User detail for operational review  
+**Components:**
+- Profile summary (no sensitive KYC docs visible to non-compliance roles)
+- KYC status
+- Balance summary
+- Recent orders
+- Recent deposits
+- Risk events
+- Support tickets
+- Actions: [Freeze account] [Escalate to compliance] [Add note]
+
+---
+
+### 16.7 Bulk Actions (Safe)
+
+Managers may bulk-select deposits for export only.  
+No bulk approval — every financial approval requires individual checklist.
+
+---
+
+## 17. Admin Portal Specification
+
+### 17.1 Route: `/admin` — Admin Dashboard
+
+**Components:**
+- Platform metrics: customers, agents, volume, revenue
+- Treasury overview card
+- Pending withdrawals count
+- Risk alerts
+- Reconciliation status (MATCHED / MISMATCH)
+
+---
+
+### 17.2 Route: `/admin/treasury`
+
+**Purpose:** Treasury Control Center  
+**Components:**
+
+```
+Observed USDT Balance:    2,450.0000 USDT  [Update]
+Customer Liabilities:     1,820.5432 USDT
+Agent Liabilities:          312.7500 USDT
+Platform Revenue:           316.7068 USDT
+─────────────────────────────────────────
+Accounting Total:         2,450.0000 USDT
+─────────────────────────────────────────
+Reconciliation:           ✅ MATCHED
+```
+
+"Update observed balance" requires TREASURY_ADMIN role + audit.  
+No private keys stored in application. Custody is external.
+
+---
+
+### 17.3 Route: `/admin/rates`
+
+**Purpose:** Rate management  
+**Components:**
+- Current customer quote rate: ₹91.50/USDT [Edit]
+- Current agent settlement rate: ₹91.00/USDT [Edit]
+- Rate history table
+- Profitability calculator:
+  - Input: customer rate, agent rate, commission %, order amount
+  - Output: platform contribution per order, contribution %
+  - Warning if negative contribution
+
+**Rate change:**
+1. Enter new rate + reason
+2. Effective time (immediate or future)
+3. Preview impact on sample order
+4. Confirm (step-up auth for significant changes)
+5. Audit entry created
+
+---
+
+### 17.4 Route: `/admin/settings`
+
+**Categories:** General, Customer, Agent, Payments, Rates, Fees, Commission, Referral, Security, Notifications, Telegram, Risk, Treasury, Maintenance
+
+Each setting:
+- Current value
+- Edit form (inline or modal)
+- Validation
+- Save → confirm dialog → audit entry
+- Changed by / changed at display
+- View history link
+
+---
+
+### 17.5 Route: `/admin/emergency`
+
+**Purpose:** Emergency controls  
+**Components:**
+
+| Control | Description |
+|---|---|
+| Pause Deposits | No new deposit requests |
+| Pause New Orders | No new payment orders |
+| Pause Agent Claims | Agents cannot claim orders |
+| Pause Withdrawals | No withdrawal requests |
+| Pause Settlements | Settlement approvals blocked |
+| Global Maintenance | All user-facing apps → maintenance page |
+
+Each toggle requires:
+- Reason field (required)
+- Confirm dialog: "This will affect X active users"
+- Audit entry
+- Admin Telegram alert
+
+---
+
+### 17.6 Route: `/admin/reconciliation`
+
+**Purpose:** Daily reconciliation workflow  
+**Components:**
+- Input: Observed treasury balance (snapshot)
+- Expected accounting balance (computed from ledger)
+- Difference
+- Status: MATCHED / MISMATCH
+- If MISMATCH: alert created, investigation case
+- Historical reconciliation table
+
+---
+
+### 17.7 Route: `/admin/audit`
+
+**Purpose:** Full audit log viewer  
+**Filters:** Actor, action type, entity type, date range  
+**Columns:** Timestamp, actor, role, action, entity, IP  
+**Export:** CSV  
+**No pagination gap:** Cursor-based pagination for high-volume
+
+---
+
+### 17.8 Route: `/admin/agents/[id]`
+
+**Components:**
+- Agent profile, status, tier
+- Performance metrics
+- Commission tier change [dropdown]
+- Capacity limits override
+- Status change: Active / Limited / Suspended / Banned
+  - All require reason + audit
+- Training completion status
+- Risk events
+- Order history
+- Settlement history
+- Withdrawal history
+
+---
+
+### 17.9 Route: `/admin/referrals`
+
+**Sub-routes:**
+- `/admin/referrals` — overview, stats
+- `/admin/referrals/rewards` — pending/approved rewards list
+- `/admin/referrals/fraud` — flagged referrals for review
+- `/admin/referrals/settings` — reward amounts, depth config
+
+**Fraud review:**
+- Same IP/device relationships highlighted
+- Same email pattern flagged
+- Circular referral detection
+- Manual approve/reject each reward
+
+---
+
+## 18. Telegram Integration
+
+### 18.1 Bot Setup
+
+Bot token: `TELEGRAM_BOT_TOKEN` (server-only env var, never client-exposed)  
+Bot username: configured via `TELEGRAM_BOT_USERNAME`  
+Webhook secret: `TELEGRAM_WEBHOOK_SECRET`
+
+### 18.2 Webhook Endpoint
+
+```
+POST /api/telegram/webhook
+```
+
+**Validation:**
+```typescript
+// Validate Telegram webhook secret
+const secretHeader = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
+if (secretHeader !== process.env.TELEGRAM_WEBHOOK_SECRET) {
+  return Response.json({ error: 'Unauthorized' }, { status: 401 });
+}
+```
+
+**Idempotency:**
+```typescript
+// Check update_id not already processed
+const { data: existing } = await supabase
+  .from('telegram_messages')
+  .select('id')
+  .eq('update_id', update.update_id)
+  .single();
+
+if (existing) return Response.json({ ok: true }); // already processed
+```
+
+**Update processing:**
+1. Parse Update object
+2. Identify command or message
+3. Look up linked user by `telegram_chat_id`
+4. Route to appropriate command handler
+5. Send response
+
+### 18.3 Account Linking Flow
+
+```typescript
+// 1. User clicks "Link Telegram" in app
+// 2. System generates one-time token (expires 15 min)
+// 3. User receives deep link: https://t.me/BotName?start=TOKEN
+// 4. User taps link → Telegram bot receives /start TOKEN
+// 5. Bot validates token:
+//    - Not expired
+//    - Not already used
+// 6. Bot stores telegram_chat_id on user profile
+// 7. Bot sends confirmation message
+// 8. App shows "Telegram connected"
+```
+
+### 18.4 Customer Commands
+
+| Command | Response |
+|---|---|
+| `/start` | Welcome + link instructions if not linked |
+| `/balance` | Available USDT balance |
+| `/activity` | Last 3 orders/deposits |
+| `/payments` | Last 3 completed payments |
+| `/referral` | Referral code + link |
+| `/support` | Support ticket creation link |
+| `/settings` | Link to app settings |
+
+### 18.5 Agent Commands
+
+| Command | Response |
+|---|---|
+| `/start` | Welcome + link instructions |
+| `/orders` | Available orders count + link |
+| `/balance` | Available + pending USDT |
+| `/earnings` | This month earnings |
+| `/partners` | Partner referral stats |
+| `/withdraw` | Link to withdrawal page |
+| `/support` | Support link |
+
+### 18.6 Notification Message Formats
+
+**Deposit Credited:**
+```
+💰 Deposit Verified
+
+Amount: 500.0000 USDT
+Deposit: DEP-128821
+Network: TRON (TRC-20)
+New Balance: 1,284.5321 USDT
+
+View: [Open App]
+```
+
+**New Settlement Order (agent):**
+```
+🔔 New Settlement Order
+
+Amount: ₹5,000.00
+Commission: 1.50%
+Est. Earnings: 0.8197 USDT
+Timer: 10:00
+
+[View Order]
+```
+
+**Settlement Approved (agent):**
+```
+✅ Settlement Approved
+
+Order: ORD-298710
+USDT Credited: 55.7692 USDT
+New Balance: 112.3401 USDT
+
+[View Wallet]
+```
+
+**Payment Completed (customer):**
+```
+✅ Payment Confirmed
+
+Amount: ₹5,000.00
+Recipient: example@upi
+Order: ORD-298710
+USDT Used: 54.6448 USDT
+
+[View Receipt]
+```
+
+**Security Alert:**
+```
+⚠️ Security Alert
+
+New login to your TetherPay account.
+Device: Chrome / Android
+Time: 14:32 IST
+
+Not you? [Secure Account]
+```
+
+**Admin — Treasury Mismatch:**
+```
+🚨 Treasury Mismatch Detected
+
+Expected: 2,450.0000 USDT
+Observed:  2,300.0000 USDT
+Difference: -150.0000 USDT
+
+[View Reconciliation]
+```
+
+### 18.7 Telegram Service Implementation
+
+```typescript
+// lib/telegram/service.ts
+export class TelegramService {
+  private baseUrl: string;
+  private token: string;
+
+  constructor() {
+    this.token = process.env.TELEGRAM_BOT_TOKEN!;
+    this.baseUrl = `https://api.telegram.org/bot${this.token}`;
+  }
+
+  async sendMessage(chatId: number, text: string, options?: {
+    parse_mode?: 'HTML' | 'MarkdownV2';
+    reply_markup?: object;
+  }): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, ...options }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`Telegram API error: ${JSON.stringify(error)}`);
+    }
+  }
+
+  async setWebhook(url: string, secret: string): Promise<void> {
+    await fetch(`${this.baseUrl}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, secret_token: secret }),
+    });
+  }
+}
+```
+
+---
+
+## 19. Notifications & Realtime
+
+### 19.1 Realtime Event Map
+
+| Event | Source | Subscribers | UI Effect | Telegram |
+|---|---|---|---|---|
+| `DEPOSIT_SUBMITTED` | API | Ops team | Queue badge +1 | Ops alert |
+| `DEPOSIT_CREDITED` | API | Customer | Balance updates | ✓ |
+| `DEPOSIT_REJECTED` | API | Customer | Status update | ✓ |
+| `ORDER_CREATED` | API | Customer | Order appears | — |
+| `ORDER_AVAILABLE` | API | All active agents | New order appears | ✓ |
+| `ORDER_ASSIGNED` | API | Customer, agent | Status update | ✓ |
+| `ORDER_PAYMENT_SUBMITTED` | API | Ops | Queue badge | — |
+| `ORDER_COMPLETED` | API | Customer | Completion animation | ✓ |
+| `ORDER_EXPIRED` | System | Customer, agent | Status update | ✓ |
+| `AGENT_SETTLEMENT_PENDING` | API | Agent | Pending balance update | ✓ |
+| `AGENT_COMMISSION_CREDITED` | API | Agent | Balance update | ✓ |
+| `WITHDRAWAL_REQUESTED` | API | Admin | Queue badge | Admin alert |
+| `WITHDRAWAL_PAID` | API | Agent | Balance update | ✓ |
+
+### 19.2 Supabase Realtime Configuration
+
+```typescript
+// Subscribe to order changes for current user
+const orderChannel = supabase
+  .channel(`orders:${userId}`)
+  .on(
+    'postgres_changes',
+    {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'payment_orders',
+      filter: `customer_id=eq.${userId}`,
+    },
+    (payload) => {
+      handleOrderStatusChange(payload.new);
+    }
+  )
+  .subscribe();
+
+// Agent: subscribe to available orders
+const marketplaceChannel = supabase
+  .channel('marketplace')
+  .on(
+    'postgres_changes',
+    {
+      event: '*',
+      schema: 'public',
+      table: 'payment_orders',
+      filter: `status=eq.AVAILABLE`,
+    },
+    (payload) => {
+      updateOrderMarketplace(payload);
+    }
+  )
+  .subscribe();
+```
+
+**Enable realtime publication:**
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE payment_orders;
+ALTER PUBLICATION supabase_realtime ADD TABLE deposits;
+ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
+ALTER PUBLICATION supabase_realtime ADD TABLE account_balances;
+ALTER PUBLICATION supabase_realtime ADD TABLE agent_withdrawals;
+```
+
+### 19.3 Notification Templates
+
+```sql
+INSERT INTO notification_templates (event_key, title_template, body_template, telegram_template, channels) VALUES
+  ('DEPOSIT_CREDITED',
+   'Deposit Confirmed',
+   'Your deposit of {{amount}} USDT has been verified and credited to your wallet.',
+   '💰 Deposit Verified\n\nAmount: {{amount}} USDT\nDeposit: {{display_id}}',
+   '{IN_APP,TELEGRAM}'),
+
+  ('ORDER_COMPLETED',
+   'Payment Confirmed',
+   'Your payment of ₹{{inr_amount}} to {{recipient_upi_id}} has been confirmed.',
+   '✅ Payment Confirmed\n\nAmount: ₹{{inr_amount}}\nRecipient: {{recipient_upi_id}}',
+   '{IN_APP,TELEGRAM}'),
+
+  ('ORDER_AVAILABLE',
+   'New Order Available',
+   'A new payment order for ₹{{inr_amount}} is available. Est. commission: {{commission_usdt}} USDT.',
+   '🔔 New Settlement Order\n\nAmount: ₹{{inr_amount}}\nCommission: {{commission_rate}}%',
+   '{IN_APP,TELEGRAM}'),
+
+  ('AGENT_SETTLEMENT_PENDING',
+   'Settlement Pending',
+   'Your settlement for order {{display_id}} is being reviewed.',
+   '⏳ Settlement Under Review\n\nOrder: {{display_id}}\nAmount: {{total_usdt}} USDT',
+   '{IN_APP,TELEGRAM}'),
+
+  ('WITHDRAWAL_PAID',
+   'Withdrawal Complete',
+   'Your withdrawal of {{amount}} USDT has been processed.',
+   '✅ Withdrawal Paid\n\nAmount: {{amount}} USDT\nTX: {{tx_hash}}',
+   '{IN_APP,TELEGRAM}'),
+
+  ('SECURITY_LOGIN',
+   'New Login Detected',
+   'New login from {{device}} at {{time}}.',
+   '⚠️ Security Alert\n\nNew login to your account.\nDevice: {{device}}',
+   '{IN_APP,TELEGRAM}');
+```
+
+---
+
+## 20. Referral System
+
+### 20.1 Customer Referral
+
+**Referral code:** 8-character alphanumeric, auto-generated on profile creation.  
+`referral_code = nanoid(8).toUpperCase()`
+
+**Referral link:** `https://tetherpay.fun/register?ref=CODE`
+
+**Attribution:** On registration with ref code:
+- Create `referral_relationships` record
+- `relationship_type = 'CUSTOMER'`
+
+**Reward trigger:** First completed payment order by referred customer.
+
+**Reward flow:**
+1. Order completes
+2. System checks if customer has a referrer
+3. Checks `referral_rewards` for same trigger event (idempotency)
+4. Creates pending reward
+5. Admin approves batch of pending rewards
+6. Credit to referrer's account via ledger
+
+**Reward amount:** `settings.customer_referral_reward_usdt` (default: 1.00 USDT)
+
+### 20.2 Agent Partner Referral
+
+**Referral code:** Separate partner code for each agent.  
+**Attribution:** When a new agent registers using the partner link.
+
+**Reward trigger:** Each commission earned by referred agent.  
+**Reward amount:** `commission_usdt × agent_partner_reward_percent / 100`
+
+**Financial note:** Partner reward is a cost to platform, not taken from referred agent's commission.
+
+### 20.3 Anti-Fraud Rules
+
+Checks applied at referral attribution and reward approval:
+
+1. **Self-referral:** `referrer_id != referred_id` — DB constraint
+2. **Same IP at registration:** Flag for review (not auto-block)
+3. **Same device fingerprint:** Flag for review
+4. **Same email pattern:** Flag if email domain same as referrer
+5. **Duplicate account:** Cross-reference phone/KYC
+6. **Circular referral:** A → B → A not permitted; depth = 1 max
+7. **Suspicious velocity:** >10 referrals in 24h → auto-flag
+
+All flagged referrals: `fraud_flagged = true`, reward held `PENDING` until admin approves.
+
+### 20.4 Admin Referral Controls
+
+- Enable/disable referral system globally
+- Configure reward amounts
+- Configure qualification criteria
+- View fraud-flagged referrals
+- Approve/reject individual rewards
+- Reverse credited rewards (if fraud detected post-credit)
+
+---
+
+## 21. Support & Dispute System
+
+### 21.1 Support Ticket Flow
+
+```
+Customer/Agent submits ticket (OPEN)
+  ↓
+Auto-assigned or manual assignment to SUPPORT_AGENT (ASSIGNED)
+  ↓
+[Waiting for customer response] (WAITING_CUSTOMER)
+  ↓
+[Agent responds] → WAITING_AGENT
+  ↓
+[Escalate to manager] → ESCALATED
+  ↓
+[Resolved] → RESOLVED
+  ↓
+[Closed after 48h or manual] → CLOSED
+```
+
+### 21.2 Support Categories
+
+```
+DEPOSIT         — deposit issues
+ORDER           — payment order issues
+PAYMENT         — payment delivery issues
+WITHDRAWAL      — USDT withdrawal issues
+ACCOUNT         — account/KYC/access
+AGENT_ISSUE     — agent behavior report
+TECHNICAL       — app issues
+OTHER
+```
+
+### 21.3 Dispute Flow
+
+Disputes are raised against specific payment orders.
+
+```
+PAYMENT_REVIEWER raises dispute → order.status = DISPUTED
+dispute.status = OPEN
+  ↓
+Assigned to OPERATIONS_MANAGER → INVESTIGATING
+  ↓
+Evidence collection from customer + agent
+  ↓
+[Decision]
+  RESOLVED — with resolution type:
+    - REFUNDED: customer balance restored, agent not settled
+    - SETTLED_AS_IS: order treated as completed
+    - PARTIAL_REFUND: partial credit to customer
+    - NO_ACTION: dispute closed, no change
+```
+
+**Dispute resolution creates:**
+- Audit entry
+- Ledger adjustment if refund
+- Notifications to both parties
+
+---
+
+## 22. Risk & Compliance
+
+### 22.1 Risk Event Auto-Detection
+
+| Event | Trigger | Flag | Level |
+|---|---|---|---|
+| Large deposit | > 5x average deposit | `HIGH_VALUE` | MEDIUM |
+| Velocity | >3 orders in 1 hour | `UNUSUAL_VELOCITY` | MEDIUM |
+| Failed claims | Agent fails 3 orders in a row | `AGENT_BEHAVIOR` | HIGH |
+| Dispute spike | 2 disputes in 24h | `PAYMENT_DISPUTE` | HIGH |
+
+Auto-detected events create risk records and alert Telegram admin channel.  
+No auto-blocking — requires manual review decision.
+
+### 22.2 KYC Data Storage
+
+KYC documents: **private Supabase storage bucket** (`kyc-documents`).  
+Access: signed URLs generated server-side, valid 10 minutes.  
+No KYC file paths exposed to client directly.  
+Compliance role required to generate signed URLs.
+
+### 22.3 Compliance Data Structures
+
+```typescript
+interface KYCRecord {
+  document_type: 'AADHAAR' | 'PAN' | 'PASSPORT' | 'VOTER_ID' | 'DRIVING_LICENSE';
+  document_number_hash: string;  // bcrypt hash, not plaintext
+  verification_level: 'BASIC' | 'FULL' | 'ENHANCED';
+  screening_result: {
+    provider: string;
+    matched: boolean;
+    risk_score: number;
+    checked_at: string;
+  };
+}
+```
+
+**LEGAL/COMPLIANCE REVIEW REQUIRED:**
+- Exact KYC document requirements for VDA-related activity in India
+- AML/KYC program documentation
+- FIU-IND registration requirements
+- TDS obligations on USDT settlements
+- DPDPA 2023 compliance for biometric/ID data handling
+- Cross-border USDT receiving implications
+
+---
+
+## 23. Treasury & Reconciliation
+
+### 23.1 Treasury Model
+
+The web application stores:
+- Public wallet addresses
+- Manual balance observations
+- Accounting ledger
+
+The web application does **NOT** store:
+- Private keys
+- Seed phrases
+- Wallet passwords
+
+**Custody boundary:** Private key management is external (hardware wallet, qualified custodian, or authorized personnel's offline process). The application records the result of treasury operations.
+
+### 23.2 Reconciliation Formula
+
+```
+Expected Balance = 
+    SUM(customer available balances)
+  + SUM(customer reserved balances)
+  + SUM(agent available balances)
+  + SUM(agent pending balances)
+  + SUM(agent withdrawal reserved balances)
+  + platform_revenue
+  + platform_float
+
+Observed Balance = manually entered from blockchain/wallet
+
+Reconciliation Status:
+  MATCHED   if |observed - expected| < tolerance (e.g. 0.001 USDT)
+  MISMATCH  otherwise
+```
+
+### 23.3 Daily Reconciliation Workflow
+
+1. Treasury admin opens `/admin/reconciliation`
+2. Inputs today's observed wallet balance
+3. System calculates expected balance from ledger
+4. Shows MATCHED or MISMATCH
+5. If MISMATCH: creates reconciliation case, Telegram admin alert
+6. Admin investigates and notes findings
+7. Resolution recorded in audit log
+
+**PRODUCTION INFRASTRUCTURE REQUIREMENT:** Automated blockchain balance monitoring should be implemented before significant public-money scale. The current model relies on manual observation.
+
+---
+
+## 24. Rate, Fee & Commission Engine
+
+### 24.1 Rate Management
+
+Rates are stored in `app_settings` and snapshot into orders at quote time.  
+Orders are immutable after confirmation — the rate at quote time is locked.
+
+| Setting Key | Example | Description |
+|---|---|---|
+| `customer_quote_rate` | 91.50 | INR per USDT charged to customer |
+| `agent_settlement_rate` | 91.00 | INR per USDT paid to agent |
+
+### 24.2 Fee Configuration
+
+| Setting Key | Example | Description |
+|---|---|---|
+| `platform_fee_percent` | 0.00 | Percentage fee on order INR amount |
+| `platform_fee_flat_inr` | 0.00 | Flat fee per order (INR) |
+
+Fee minimum and maximum can be added as additional settings.
+
+### 24.3 Commission Tiers
+
+| Tier | Setting Key | Default |
+|---|---|---|
+| STANDARD | `standard_commission_rate` | 1.50% |
+| TRUSTED | `trusted_commission_rate` | 1.75% |
+| PREMIUM | `premium_commission_rate` | 2.00% |
+
+Agent's tier is set in `agent_profiles.commission_tier`.  
+Commission rate is resolved at order creation/assignment and stored immutably in `payment_orders`.
+
+### 24.4 Profitability Calculator (Admin)
+
+```typescript
+function calculatePlatformContribution(params: {
+  inrAmount: Decimal;
+  customerRate: Decimal;
+  agentRate: Decimal;
+  commissionRate: Decimal;
+  platformFeePercent: Decimal;
+  platformFeeFlat: Decimal;
+  referralCostUsdt: Decimal;
+}) {
+  const feeInr = params.inrAmount.mul(params.platformFeePercent.div(100))
+                   .add(params.platformFeeFlat);
+  const totalInr = params.inrAmount.add(feeInr);
+  const customerDebit = totalInr.div(params.customerRate);
+
+  const baseUsdt = params.inrAmount.div(params.agentRate);
+  const commissionUsdt = params.inrAmount.mul(params.commissionRate.div(100))
+                           .div(params.agentRate);
+  const agentTotal = baseUsdt.add(commissionUsdt);
+
+  const contribution = customerDebit.sub(agentTotal).sub(params.referralCostUsdt);
+  const contributionPercent = contribution.div(customerDebit).mul(100);
+
+  return {
+    customerDebit,
+    agentTotal,
+    contribution,
+    contributionPercent,
+    isNegative: contribution.lt(0),
+  };
+}
+```
+
+Admin UI shows live preview with warning banner when contribution is negative.
+
+---
+
+## 25. Security Architecture
+
+### 25.1 Threat Model
+
+| Threat | Mitigation |
+|---|---|
+| Account takeover | Password hashing (Supabase), 2FA, login alerts, session management |
+| Balance manipulation | No direct balance mutations, ledger-only, DB constraints |
+| Double-spend | TX hash unique index, idempotency keys |
+| IDOR | RLS policies per user/role |
+| CSRF | Same-site cookies, CSRF tokens for mutations |
+| XSS | React escaping, CSP headers |
+| SQL injection | Parameterized queries (Supabase client) |
+| Secret exposure | Server-only env vars, never NEXT_PUBLIC_ for secrets |
+| Webhook replay | Telegram update_id deduplication, secret header |
+| Admin privilege escalation | Role stored in DB, not JWT claims only |
+| File upload attacks | MIME validation, size limits, private bucket |
+| Rate abuse | Rate limiting on all sensitive endpoints |
+
+### 25.2 Security Headers (netlify.toml)
+
+```toml
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Content-Security-Policy = """
+      default-src 'self';
+      script-src 'self' 'unsafe-inline' 'unsafe-eval';
+      style-src 'self' 'unsafe-inline';
+      img-src 'self' data: blob: https:;
+      connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.telegram.org;
+      font-src 'self' https://fonts.gstatic.com;
+      frame-ancestors 'none';
+    """
+```
+
+### 25.3 Rate Limiting
+
+```typescript
+// Middleware rate limit table (per IP unless noted)
+const rateLimits = {
+  '/api/auth/login':          { max: 5,   window: 900 },   // 5 per 15 min
+  '/api/auth/register':       { max: 10,  window: 3600 },  // 10 per hour
+  '/api/auth/reset-password': { max: 3,   window: 3600 },  // 3 per hour
+  '/api/deposits':            { max: 10,  window: 3600 },  // per user
+  '/api/orders':              { max: 20,  window: 3600 },  // per user
+  '/api/orders/:id/claim':    { max: 30,  window: 60 },    // per agent
+  '/api/telegram/webhook':    { max: 100, window: 60 },    // per IP
+  '/api/agent/withdrawals':   { max: 5,   window: 3600 },  // per agent
+};
+```
+
+### 25.4 Storage Security
+
+**Bucket configuration:**
+
+| Bucket | Access | Purpose | Max size | MIME |
+|---|---|---|---|---|
+| `payment-proofs` | Private | Agent payment screenshots | 5MB | image/*, application/pdf |
+| `dispute-evidence` | Private | Dispute attachments | 10MB | image/*, application/pdf |
+| `support-attachments` | Private | Support ticket files | 5MB | image/*, application/pdf |
+| `kyc-documents` | Private (compliance only) | KYC docs | 10MB | image/*, application/pdf |
+| `public-assets` | Public | Public images | 2MB | image/* |
+
+Access policy: Signed URLs generated server-side, valid 10 minutes, user-scoped.
+
+### 25.5 Audit Log Security
+
+Audit log table:
+- No `UPDATE` or `DELETE` permissions granted to any role via RLS
+- All mutations append-only
+- Sensitive field values (passwords, hashes) must not be logged
+- Before/after state logged as JSON
+
+---
+
+## 26. Component Library
+
+### 26.1 Base UI Components
+
+```typescript
+// Button variants
+type ButtonProps = {
+  variant: 'primary' | 'secondary' | 'ghost' | 'danger' | 'success';
+  size: 'sm' | 'md' | 'lg';
+  loading?: boolean;
+  disabled?: boolean;
+  fullWidth?: boolean;
+  leftIcon?: ReactNode;
+  rightIcon?: ReactNode;
+  children: ReactNode;
+  onClick?: () => void;
+};
+
+// Input variants
+type InputProps = {
+  label?: string;
+  hint?: string;
+  error?: string;
+  prefix?: string;         // e.g. "₹"
+  suffix?: string;         // e.g. "USDT"
+  size: 'sm' | 'md' | 'lg';
+  disabled?: boolean;
+  readOnly?: boolean;
+};
+
+// StatusBadge
+type StatusBadgeProps = {
+  status: string;
+  size?: 'sm' | 'md';
+};
+
+// GlassCard
+type GlassCardProps = {
+  padding?: 'none' | 'sm' | 'md' | 'lg';
+  elevated?: boolean;
+  className?: string;
+  children: ReactNode;
+};
+```
+
+### 26.2 Financial Components
+
+```typescript
+// MoneyDisplay — handles both USDT and INR
+type MoneyDisplayProps = {
+  amount: string;         // Decimal string, not number
+  currency: 'USDT' | 'INR';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+  showSign?: boolean;
+  color?: 'default' | 'success' | 'danger' | 'muted';
+};
+
+// Usage:
+<MoneyDisplay amount="54.6448" currency="USDT" size="xl" />
+// renders: 54.6448 USDT
+
+<MoneyDisplay amount="5000.00" currency="INR" />
+// renders: ₹5,000.00
+
+// BalanceDisplay — shows available + reserved
+type BalanceDisplayProps = {
+  available: string;
+  reserved: string;
+  pending?: string;
+  currency: 'USDT' | 'INR';
+};
+
+// CountdownTimer — backend-anchored
+type CountdownTimerProps = {
+  expiresAt: string;    // ISO8601 from server
+  onExpire: () => void;
+  urgentThreshold?: number;  // seconds, default 120
+};
+
+// OrderTimeline
+type OrderTimelineProps = {
+  status: order_status;
+  transitions: OrderTransition[];
+};
+```
+
+### 26.3 Empty States
+
+```typescript
+const emptyStates = {
+  orders: {
+    title: "No payment orders yet",
+    description: "Your payment activity will appear here.",
+    action: { label: "Make a payment", href: "/app/pay" },
+  },
+  deposits: {
+    title: "No deposits yet",
+    description: "Deposit USDT to get started.",
+    action: { label: "Deposit USDT", href: "/app/wallet/deposit" },
+  },
+  agentOrders: {
+    title: "No orders available",
+    description: "New orders will appear here in real time.",
+    action: null,
+  },
+  wallet: {
+    title: "Your wallet is empty",
+    description: "Make your first USDT deposit to start using TetherPay.",
+    action: { label: "Deposit USDT", href: "/app/wallet/deposit" },
+  },
+};
+```
+
+### 26.4 Error States
+
+```typescript
+const ErrorState = ({ title, description, retry }: ErrorStateProps) => (
+  <div className="text-center p-8">
+    <AlertCircle className="h-12 w-12 text-warning mx-auto mb-4" />
+    <h3 className="text-lg font-semibold text-primary">{title}</h3>
+    <p className="text-secondary mt-2">{description}</p>
+    <p className="text-sm text-tertiary mt-1">Your balance was not affected.</p>
+    {retry && (
+      <Button variant="secondary" onClick={retry} className="mt-4">
+        Try again
+      </Button>
+    )}
+  </div>
+);
+```
+
+---
+
+## 27. Deployment & Infrastructure
+
+### 27.1 `netlify.toml` (Complete)
+
+```toml
+[build]
+  base       = "apps/web"
+  command    = "pnpm run build"
+  publish    = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  PNPM_VERSION = "8"
+  NEXT_TELEMETRY_DISABLED = "1"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[dev]
+  command   = "pnpm run dev"
+  port      = 3000
+  targetPort = 3000
+
+# Production deployment: main branch only
+[context.production]
+  command = "pnpm run build"
+
+# Branch/preview deployments
+[context.deploy-preview]
+  command = "pnpm run build"
+
+[context.branch-deploy]
+  command = "pnpm run build"
+
+# Security headers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Strict-Transport-Security     = "max-age=63072000; includeSubDomains; preload"
+    X-Content-Type-Options        = "nosniff"
+    X-Frame-Options               = "DENY"
+    X-XSS-Protection              = "1; mode=block"
+    Referrer-Policy               = "strict-origin-when-cross-origin"
+    Permissions-Policy            = "camera=self, microphone=(), geolocation=()"
+    Content-Security-Policy       = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.telegram.org; font-src 'self' data:; frame-ancestors 'none';"
+
+# Cache static assets
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# SPA fallback not needed — Next.js handles routing
+# Subdomain routing via Netlify domain settings:
+# app.tetherpay.fun → primary site (middleware handles /app routes)
+# All subdomains point to same Netlify deployment
+```
+
+### 27.2 Environment Variables (`.env.example`)
+
+```bash
+# ============================================================
+# TETHERPAY ENVIRONMENT VARIABLES
+# ============================================================
+# PUBLIC = safe for browser (NEXT_PUBLIC_ prefix)
+# SECRET = server-only, never expose to client
+# ============================================================
+
+# --- App URLs (PUBLIC) ---
+NEXT_PUBLIC_APP_URL=https://tetherpay.fun
+NEXT_PUBLIC_CUSTOMER_APP_URL=https://app.tetherpay.fun
+NEXT_PUBLIC_AGENT_APP_URL=https://agent.tetherpay.fun
+NEXT_PUBLIC_OPS_APP_URL=https://ops.tetherpay.fun
+NEXT_PUBLIC_ADMIN_APP_URL=https://admin.tetherpay.fun
+NEXT_PUBLIC_NOTIFICATIONS_URL=https://notifications.tetherpay.fun
+
+# --- Supabase (PUBLIC - anon key is safe) ---
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=eyJ...  # anon/public key
+
+# --- Supabase (SECRET - service role key, server-only) ---
+SUPABASE_SERVICE_ROLE_KEY=eyJ...  # NEVER expose to browser
+
+# --- Telegram (SECRET) ---
+TELEGRAM_BOT_TOKEN=123456789:ABC...  # NEVER expose to browser
+TELEGRAM_WEBHOOK_SECRET=your-random-secret-string  # NEVER expose
+TELEGRAM_ADMIN_CHAT_ID=-1001234567890  # Admin group chat ID
+
+# --- Telegram (PUBLIC - username only) ---
+NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=YourBotUsername
+
+# --- USDT Wallet (PUBLIC - deposit address only) ---
+NEXT_PUBLIC_CENTRAL_USDT_TRON_ADDRESS=TXxx...
+NEXT_PUBLIC_DEFAULT_USDT_NETWORK=TRON
+
+# --- App Config (PUBLIC) ---
+NEXT_PUBLIC_APP_NAME=TetherPay
+NEXT_PUBLIC_SUPPORT_EMAIL=support@tetherpay.fun
+
+# --- Environment ---
+NODE_ENV=development  # development | production
+
+# --- Optional: Email Provider (SECRET) ---
+# EMAIL_PROVIDER=resend  # or 'sendgrid', 'ses'
+# EMAIL_API_KEY=re_...
+# EMAIL_FROM=noreply@tetherpay.fun
+
+# --- Rate Limiting (optional, for external services) ---
+# UPSTASH_REDIS_URL=https://...
+# UPSTASH_REDIS_TOKEN=...
+```
+
+### 27.3 Cloudflare DNS Configuration
+
+```
+Type    Name                          Value                        Proxy
+────    ────                          ─────                        ─────
+A       tetherpay.fun                 Netlify IP (via CNAME)      ✅
+CNAME   www                           tetherpay.fun               ✅
+CNAME   app                           main--site.netlify.app      ✅
+CNAME   agent                         main--site.netlify.app      ✅
+CNAME   ops                           main--site.netlify.app      ✅
+CNAME   admin                         main--site.netlify.app      ✅
+CNAME   notifications                 main--site.netlify.app      ✅
+TXT     @                             v=spf1 include:... ~all      —
+CNAME   _dmarc.tetherpay.fun          DMARC record                —
+MX      @                             Mail provider MX records    —
+```
+
+**Cloudflare settings:**
+- SSL/TLS: Full (strict)
+- Always Use HTTPS: On
+- Min TLS: 1.2
+- HSTS: Enabled (1 year)
+- Bot Fight Mode: On
+
+### 27.4 Domain Routing Architecture
+
+One Netlify deployment serves all subdomains.  
+`next.config.ts` handles domain-based routing:
+
+```typescript
+// next.config.ts
+module.exports = {
+  async rewrites() {
+    return {
+      beforeFiles: [
+        // Subdomain routing handled by middleware
+      ],
+    };
+  },
+};
+```
+
+`middleware.ts` reads `request.headers.get('host')` to determine which portal:
+```typescript
+const host = request.headers.get('host') || '';
+const isApp = host.startsWith('app.');
+const isAgent = host.startsWith('agent.');
+const isOps = host.startsWith('ops.');
+const isAdmin = host.startsWith('admin.');
+const isNotifications = host.startsWith('notifications.');
+```
+
+---
+
+## 28. Local Development
+
+### 28.1 Prerequisites
+
+```bash
+node --version  # must be 20.x
+pnpm --version  # must be 8.x
+# Install Node 20:
+nvm install 20
+nvm use 20
+# Install pnpm:
+npm install -g pnpm@8
+```
+
+`.nvmrc`:
+```
+20
+```
+
+`package.json` engines:
+```json
+{
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}
+```
+
+### 28.2 Setup
+
+```bash
+# 1. Clone
+git clone https://github.com/your-org/tetherpay.git
+cd tetherpay
+
+# 2. Install dependencies
+pnpm install
+
+# 3. Configure environment
+cp .env.example apps/web/.env.local
+# Edit apps/web/.env.local with your local Supabase values
+
+# 4. Start local Supabase
+pnpm supabase start
+
+# 5. Run migrations
+pnpm supabase db push
+
+# 6. Seed development data
+pnpm supabase db reset  # applies migrations + seed
+
+# 7. Set up Telegram webhook (local — use ngrok)
+ngrok http 3000
+# Then: POST https://api.telegram.org/bot{TOKEN}/setWebhook
+#       with url = https://your-ngrok-url.ngrok.io/api/telegram/webhook
+
+# 8. Start dev server
+pnpm dev
+```
+
+### 28.3 Local Supabase
+
+```bash
+pnpm supabase start
+# Output:
+#   API URL: http://localhost:54321
+#   Studio URL: http://localhost:54323
+#   DB URL: postgresql://postgres:postgres@localhost:54322/postgres
+```
+
+Local environment variables:
+```bash
+NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=eyJ...  # from supabase start output
+SUPABASE_SERVICE_ROLE_KEY=eyJ...              # from supabase start output
+```
+
+### 28.4 Seed Data
+
+```sql
+-- dev_seed.sql (DEVELOPMENT ONLY — DO NOT RUN IN PRODUCTION)
+
+-- Test users (passwords: Password123!)
+INSERT INTO auth.users (id, email, ...) VALUES
+  ('11111111-...', 'owner@demo.local', ...),
+  ('22222222-...', 'admin@demo.local', ...),
+  ('33333333-...', 'manager@demo.local', ...),
+  ('44444444-...', 'agent@demo.local', ...),
+  ('55555555-...', 'customer@demo.local', ...);
+
+-- Profiles
+INSERT INTO profiles (id, role, email, full_name) VALUES
+  ('11111111-...', 'OWNER', 'owner@demo.local', 'Owner User'),
+  ('22222222-...', 'SUPER_ADMIN', 'admin@demo.local', 'Admin User'),
+  ('33333333-...', 'OPERATIONS_MANAGER', 'manager@demo.local', 'Manager User'),
+  ('44444444-...', 'AGENT', 'agent@demo.local', 'Agent User'),
+  ('55555555-...', 'CUSTOMER', 'customer@demo.local', 'Customer User');
+
+-- Customer balance (500 USDT)
+-- Agent balance (100 USDT)
+-- Sample deposits, orders, settlements, referrals
+-- Sample notifications
+```
+
+**All seed data is clearly fake and for local testing only.**
+
+---
+
+## 29. Testing Strategy
+
+### 29.1 Unit Tests (`vitest`)
+
+```typescript
+// tests/unit/financial/formulas.test.ts
+import { describe, it, expect } from 'vitest';
+import { calculateCustomerQuote, calculateAgentSettlement } from '@/lib/financial/formulas';
+import Decimal from 'decimal.js';
+
+describe('calculateCustomerQuote', () => {
+  it('computes correct USDT debit for ₹5000 at rate 91.50', () => {
+    const result = calculateCustomerQuote({
+      inrAmount: new Decimal('5000'),
+      customerRate: new Decimal('91.50'),
+      platformFeePercent: new Decimal('0'),
+      platformFeeFlat: new Decimal('0'),
+    });
+    expect(result.customerUsdtDebit.toFixed(8)).toBe('54.64480874');
+  });
+
+  it('includes platform fee in debit', () => {
+    const result = calculateCustomerQuote({
+      inrAmount: new Decimal('5000'),
+      customerRate: new Decimal('91.50'),
+      platformFeePercent: new Decimal('1'),
+      platformFeeFlat: new Decimal('0'),
+    });
+    // fee = 50 INR, total = 5050 INR, USDT = 5050/91.50
+    expect(result.platformFeeInr.toFixed(2)).toBe('50.00');
+  });
+});
+
+describe('calculateAgentSettlement', () => {
+  it('computes correct settlement for ₹5000 at rate 91.00, 1.5% commission', () => {
+    const result = calculateAgentSettlement({
+      inrPaid: new Decimal('5000'),
+      agentRate: new Decimal('91.00'),
+      commissionRate: new Decimal('1.5'),
+    });
+    expect(result.baseUsdt.toFixed(8)).toBe('54.94505495');
+    expect(result.commissionInr.toFixed(2)).toBe('75.00');
+    expect(result.commissionUsdt.toFixed(8)).toBe('0.82417582');
+    expect(result.totalUsdt.toFixed(8)).toBe('55.76923077');
+  });
+});
+```
+
+### 29.2 Financial Invariant Tests
+
+```typescript
+// tests/unit/financial/invariants.test.ts
+
+describe('ledger double-entry invariant', () => {
+  it('sum of debits equals sum of credits for every transaction', async () => {
+    const { data: transactions } = await supabase
+      .from('ledger_transactions').select('id');
+    
+    for (const tx of transactions!) {
+      const { data: entries } = await supabase
+        .from('ledger_entries')
+        .select('direction, amount')
+        .eq('transaction_id', tx.id);
+      
+      const debits = entries!
+        .filter(e => e.direction === 'DEBIT')
+        .reduce((s, e) => s.add(e.amount), new Decimal(0));
+      const credits = entries!
+        .filter(e => e.direction === 'CREDIT')
+        .reduce((s, e) => s.add(e.amount), new Decimal(0));
+      
+      expect(debits.toFixed(18)).toBe(credits.toFixed(18));
+    }
+  });
+});
+
+describe('balance non-negativity invariant', () => {
+  it('all account balances are >= 0', async () => {
+    const { data: balances } = await supabase
+      .from('account_balances').select('*');
+    
+    for (const b of balances!) {
+      expect(new Decimal(b.available).gte(0)).toBe(true);
+      expect(new Decimal(b.reserved).gte(0)).toBe(true);
+      expect(new Decimal(b.pending).gte(0)).toBe(true);
+    }
+  });
+});
+```
+
+### 29.3 Concurrency Tests
+
+```typescript
+// tests/integration/concurrency/order-claim.test.ts
+describe('concurrent order claim', () => {
+  it('only one agent can claim an order', async () => {
+    // Create an available order
+    const orderId = await createTestOrder();
+    
+    // Two agents attempt to claim simultaneously
+    const [result1, result2] = await Promise.all([
+      claimOrder(agentId1, orderId),
+      claimOrder(agentId2, orderId),
+    ]);
+    
+    const successes = [result1, result2].filter(r => r.success);
+    const failures = [result1, result2].filter(r => !r.success);
+    
+    expect(successes).toHaveLength(1);
+    expect(failures).toHaveLength(1);
+    expect(failures[0].error).toBe('Order no longer available');
+  });
+});
+```
+
+### 29.4 State Machine Tests
+
+```typescript
+describe('deposit state transitions', () => {
+  it('cannot approve an already-credited deposit', async () => {
+    const depositId = await createCreditedDeposit();
+    
+    await expect(
+      approveDeposit(depositId, { checklist_confirmed: true, received_amount: '500' })
+    ).rejects.toThrow('Deposit is not in PENDING_VERIFICATION state');
+  });
+
+  it('TX hash cannot be credited twice', async () => {
+    const txHash = 'abc123unique';
+    await createAndCreditDeposit({ tx_hash: txHash });
+    
+    await expect(
+      createAndCreditDeposit({ tx_hash: txHash })
+    ).rejects.toThrow();
+  });
+});
+```
+
+### 29.5 E2E Tests (`@playwright/test`)
+
+```typescript
+// tests/e2e/customer.spec.ts
+test('customer deposit flow', async ({ page }) => {
+  await page.goto('/login');
+  await page.fill('[name=email]', 'customer@demo.local');
+  await page.fill('[name=password]', 'Password123!');
+  await page.click('[type=submit]');
+  
+  await page.goto('/app/wallet/deposit');
+  await page.selectOption('[name=network]', 'TRON');
+  await page.fill('[name=amount]', '500');
+  await page.click('text=I\'ve sent the USDT');
+  
+  // Submit TX hash
+  await page.fill('[name=tx_hash]', 'TXtesthash12345678901234567890');
+  await page.click('text=Submit Transaction');
+  
+  await expect(page.locator('text=TX_SUBMITTED')).toBeVisible();
+});
+```
+
+### 29.6 Security Tests (RLS)
+
+```typescript
+describe('RLS: customer cannot view other customer deposits', () => {
+  it('returns only own deposits', async () => {
+    const { data } = await supabaseAsUser(customer1Id)
+      .from('deposits').select('*');
+    
+    expect(data!.every(d => d.user_id === customer1Id)).toBe(true);
+  });
+});
+
+describe('RLS: agent cannot read customer balances', () => {
+  it('throws permission error', async () => {
+    const { error } = await supabaseAsUser(agentId)
+      .from('account_balances')
+      .select('*');
+    
+    expect(error).toBeTruthy();
+  });
+});
+```
+
+### 29.7 Test Scripts
+
+```json
+// package.json scripts
+{
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  }
+}
+```
+
+---
+
+## 30. Operations Manuals
+
+### 30.1 Deposit Operator Workflow
+
+**Daily task:** Clear the deposit verification queue.
+
+```
+1. Navigate to /ops/deposits
+2. Sort by: Oldest first
+3. For each pending deposit:
+   a. Click "Review"
+   b. Read the deposit request:
+      - Customer ID
+      - Expected amount + network
+      - Submitted TX hash
+   c. Open blockchain explorer link (Tronscan for TRON)
+   d. Verify:
+      ✓ Transaction exists on blockchain
+      ✓ Network matches (TRON/TRC-20)
+      ✓ Token is USDT (not TRX or other)
+      ✓ Destination address matches our central wallet
+      ✓ Amount matches (note any variance)
+      ✓ Transaction is confirmed (not pending)
+      ✓ TX hash not in any other credited deposit
+   e. Check every box on the verification checklist
+   f. Enter received amount (if different from expected)
+   g. Add reviewer notes
+   h. Click "Approve"
+   i. System credits customer balance
+   j. Customer receives notification
+4. If any check fails → Reject with reason
+5. If suspicious → Escalate with notes
+6. End of day: confirm queue is clear
+```
+
+### 30.2 Payment Verification Workflow
+
+```
+1. Navigate to /ops/payments
+2. Review each PAYMENT_SUBMITTED order
+3. For each:
+   a. Check order details: recipient UPI ID, INR amount
+   b. Check agent submission: UTR, payment time, notes, screenshot
+   c. Verify UTR format is valid (12+ digit)
+   d. If screenshot provided: verify amount and recipient visible
+   e. Check all verification checklist items
+   f. Approve or Reject
+   g. If suspicious: raise dispute
+4. On approval:
+   - Order completes
+   - Customer receives payment confirmed notification
+   - Agent receives settlement credit (pending)
+5. Escalate any unresolvable cases
+```
+
+### 30.3 Manager Daily Checklist
+
+```
+Morning:
+□ Clear deposit queue
+□ Clear payment verification queue
+□ Review open disputes
+□ Check risk alerts
+□ Check support escalations
+
+Afternoon:
+□ Follow up on escalated deposits
+□ Review agent performance alerts
+□ Process any withdrawal reviews in scope
+
+End of Day:
+□ Confirm queues are empty or triaged
+□ Log any unresolved issues for handover
+□ Check system status
+```
+
+### 30.4 Finance Admin Daily Checklist
+
+```
+□ Review pending withdrawals
+□ Approve qualifying withdrawals
+□ Review pending referral rewards (batch weekly or daily)
+□ Check treasury balance
+□ Run daily reconciliation
+□ Review commission reports
+□ Export daily transaction report
+```
+
+### 30.5 Owner Daily Checklist
+
+```
+□ Treasury balance + reconciliation status
+□ Customer liabilities vs treasury
+□ Daily order volume + completion rate
+□ Agent performance summary
+□ Revenue/contribution today
+□ Pending withdrawals total
+□ Risk events review
+□ Referral costs
+```
+
+---
+
+## 31. Legal Documentation
+
+**Note: All legal text below is a structural placeholder only.**  
+**LEGAL REVIEW REQUIRED for all sections before public launch.**
+
+### 31.1 Terms of Service (placeholder structure)
+
+```markdown
+# Terms of Service
+
+Last updated: [DATE]
+
+## 1. Agreement
+## 2. Eligibility
+## 3. Account Registration and Verification
+## 4. USDT Deposits
+## 5. Payment Orders
+## 6. Settlement and Completion
+## 7. Fees and Charges
+## 8. Prohibited Activities
+## 9. Suspension and Termination
+## 10. Disclaimers
+## 11. Limitation of Liability — LEGAL REVIEW REQUIRED
+## 12. Governing Law — LEGAL REVIEW REQUIRED (Indian jurisdiction)
+## 13. Dispute Resolution — LEGAL REVIEW REQUIRED
+## 14. Changes to Terms
+## 15. Contact
+```
+
+### 31.2 Indian Regulatory Review Requirements
+
+**LEGAL/COMPLIANCE REVIEW REQUIRED:**
+
+The following topics require qualified Indian legal and regulatory counsel:
+
+1. **VDA Activity:** The Finance Act 2022 introduced taxation on Virtual Digital Assets. The exact classification of TetherPay's operations must be determined.
+
+2. **Payment Aggregator/Gateway Rules:** RBI circular on Payment Aggregators (March 2020, PA-PG Guidelines). Whether TetherPay's model requires PA license must be legally determined.
+
+3. **FIU-IND Registration:** Whether the platform's USDT-INR workflow triggers Financial Intelligence Unit reporting obligations under PMLA 2002.
+
+4. **TDS:** Section 194S of the Income Tax Act applies to VDA transfers. TDS obligation analysis required.
+
+5. **AML/KYC Program:** A documented AML/KYC program meeting PMLA standards is required. This PRD describes technical data structures; a lawyer must draft the policy.
+
+6. **DPDPA 2023:** The Digital Personal Data Protection Act 2023 compliance requirements, especially for KYC biometric data.
+
+7. **UPI/Payment Rules:** NPCI's UPI operational guidelines for third-party participation.
+
+8. **Agent Classification:** Whether agents are classified as payment intermediaries with their own regulatory obligations.
+
+**No regulatory licenses, banking partnerships, or government registrations are claimed by this document.**
+
+---
+
+## 32. Reporting & Analytics
+
+### 32.1 Admin Reports
+
+| Report | Data | Filters | Export |
+|---|---|---|---|
+| Customer Report | registrations, KYC status, activity | date range | CSV |
+| Deposit Report | deposits, amounts, networks, statuses | date, status, network | CSV |
+| Payment Report | orders, amounts, completion, disputes | date, status, agent | CSV |
+| Agent Report | performance, volume, commissions | date, agent, tier | CSV |
+| Settlement Report | settlements, rates, USDT | date, agent | CSV |
+| Commission Report | commissions per agent | date, agent, tier | CSV |
+| Referral Report | referrals, rewards, qualification | date, type | CSV |
+| Payout Report | withdrawals, amounts, networks | date, status | CSV |
+| Treasury Report | balance snapshots, reconciliation | date | CSV |
+| Audit Report | audit log export | date, actor, action | CSV |
+| Dispute Report | disputes, resolution types | date, status | CSV |
+
+### 32.2 Analytics Dashboard Metrics
+
+**Customer metrics:**
+- Total registered
+- KYC verified
+- Active this month (≥1 order)
+- Churn (no activity 30d)
+
+**Order metrics:**
+- Created / Completed / Expired / Disputed (counts + rates)
+- Average completion time
+- Volume (INR, USDT)
+
+**Agent metrics:**
+- Active agents
+- Orders claimed / completed / failed
+- Average response time
+- Commission earned
+- Dispute rate
+
+**Financial metrics:**
+- USDT deposits (total, this month)
+- INR payment volume
+- Platform contribution
+- Commission costs
+- Referral costs
+
+---
+
+## 33. AI Coding Guide
+
+### 33.1 Absolute Rules
+
+```
+DO NOT invent new database tables without updating this PRD.
+DO NOT bypass Row Level Security policies.
+DO NOT directly edit account_balances table from frontend code.
+DO NOT use JavaScript native number/float for financial calculations.
+DO NOT put SUPABASE_SERVICE_ROLE_KEY or TELEGRAM_BOT_TOKEN in NEXT_PUBLIC_ variables.
+DO NOT add financial behavior without corresponding ledger entries.
+DO NOT bypass state machine validations.
+DO NOT bypass audit logging on financial or sensitive operations.
+DO NOT silently change financial formulas without updating the PRD formula section.
+DO NOT modify critical business rules without a corresponding PRD update.
+DO NOT skip idempotency keys on financial mutation endpoints.
+DO NOT assume authenticated = authorized (always check role and resource permission).
+DO NOT log sensitive financial values or credentials in application logs.
+DO NOT create balance adjustments without the manual adjustment API + second approval where required.
+```
+
+### 33.2 AI Developer Process
+
+Before making any change:
+
+```
+1. Read the relevant PRD section for the feature being changed.
+2. Read the relevant database schema (migration files).
+3. Check if existing components already cover the need.
+4. Make the minimal change required.
+5. Add or update tests for the changed behavior.
+6. Update this PRD if behavior changes.
+7. Validate: does this change respect security/RLS/audit requirements?
+8. Run: pnpm typecheck && pnpm lint && pnpm test
+```
+
+### 33.3 Financial Code Review Checklist
+
+For any PR touching financial logic:
+
+```
+□ Uses Decimal.js, not native number
+□ All money amounts from DB are strings, not numbers
+□ Idempotency key present on mutation
+□ Ledger entries created for every balance change
+□ State machine pre-condition validated
+□ Audit log entry created
+□ Error handling does not leave ledger in inconsistent state
+□ Database operation is within a transaction
+□ Balance constraints enforced at DB level
+□ No balance change is possible without authorization check
+```
+
+### 33.4 File Responsibility Rules
+
+```
+/lib/financial/formulas.ts    — Only financial calculations, no DB, no HTTP
+/lib/financial/decimal.ts     — Decimal.js configuration and helpers
+/lib/ledger/                  — Ledger operations only (server-side)
+/lib/supabase/client.ts       — Browser Supabase client (anon key only)
+/lib/supabase/server.ts       — Server Supabase client (anon key, cookie-based)
+/lib/supabase/admin.ts        — Service-role client (server only, NEVER import in client components)
+/app/api/                     — Route handlers (server-side only)
+/app/(customer)/              — Customer-facing UI components
+/app/(agent)/                 — Agent-facing UI components
+/app/(ops)/                   — Manager portal (server components preferred)
+/app/(admin)/                 — Admin portal (server components preferred)
+/components/ui/               — Pure UI components (no business logic, no DB access)
+/components/financial/        — Financial display components (display only, no calculations)
+```
+
+---
+
+## 34. Production Go-Live Checklist
+
+### 34.1 Domain & Infrastructure
+
+```
+□ Domain registered: tetherpay.fun
+□ Cloudflare account created, domain added
+□ DNS records configured for all subdomains
+□ SSL certificates active on all domains
+□ Netlify account set up
+□ Production deployment connected to main branch
+□ All environment variables set in Netlify production context
+□ Supabase project created (not local)
+□ Supabase production plan reviewed (for real-money scale)
+□ Database migrations run on production
+□ Seed data NOT present in production
+□ Demo mode DISABLED (feature flag off)
+```
+
+### 34.2 Security
+
+```
+□ All security headers configured and tested
+□ HTTPS enforced on all domains
+□ Service role key NOT in client code
+□ Telegram token NOT in client code
+□ No .env files committed to repository
+□ RLS policies verified on all tables
+□ Audit log verified (test action creates record)
+□ 2FA enabled on all admin accounts
+□ Admin accounts use strong unique passwords
+□ Supabase Dashboard MFA enabled for all team members
+□ Storage buckets set to private (except public-assets)
+□ Rate limiting operational
+□ Webhook secret configured and validated
+□ Idempotency tested on deposit/order/settlement flows
+```
+
+### 34.3 Financial
+
+```
+□ Central USDT wallet address configured in settings
+□ Central wallet address verified correct (test with tiny amount first)
+□ Agent commission rates set correctly
+□ Customer rate set correctly
+□ Agent settlement rate set correctly
+□ Platform fees configured
+□ Withdrawal limits set
+□ Order limits set
+□ Deposit limits set
+□ Treasury observed balance initialized
+□ Profitability calculator verified (no negative contribution at current rates)
+□ Reconciliation baseline established
+```
+
+### 34.4 Compliance
+
+**LEGAL/COMPLIANCE REVIEW REQUIRED before launch:**
+```
+□ Legal counsel has reviewed operating structure
+□ KYC/AML program documented and implemented
+□ Privacy policy reviewed by lawyer (DPDPA compliant)
+□ Terms of service finalized by lawyer
+□ Agent terms finalized by lawyer
+□ Tax/TDS obligations assessed
+□ Risk Disclosure accurate and lawyer-reviewed
+□ AML policy reviewed
+□ FIU-IND registration status determined
+□ Payment compliance determined
+```
+
+### 34.5 Operations
+
+```
+□ At least one DEPOSIT_REVIEWER onboarded and trained
+□ At least one PAYMENT_REVIEWER onboarded and trained
+□ TREASURY_ADMIN assigned
+□ Emergency contact list established
+□ Incident response procedure reviewed by team
+□ Daily operations checklists shared with team
+□ Support email monitored
+□ Telegram admin alerts group created
+□ Manual fallback process documented
+```
+
+### 34.6 Technical Quality
+
+```
+□ pnpm typecheck passes (zero type errors)
+□ pnpm lint passes (zero lint errors)
+□ pnpm test passes (all tests green)
+□ E2E tests passed on staging
+□ Concurrency tests passed
+□ Financial invariant tests passed
+□ Load testing completed for expected scale
+□ Error monitoring configured
+□ Application logs structured and accessible
+□ Database backups enabled (PRODUCTION INFRASTRUCTURE REQUIREMENT)
+□ Supabase PITR (Point-in-Time Recovery) enabled for production
+□ Deployment rollback procedure tested
+```
+
+### 34.7 User Communication
+
+```
+□ Status page live
+□ Support email active and monitored
+□ Telegram bot live and tested
+□ Welcome email template ready
+□ All legal pages live and accessible
+□ FAQ complete
+□ Customer help center published
+□ Agent help center published
+```
+
+**PRODUCTION INFRASTRUCTURE REQUIREMENT:**  
+Free-tier Supabase and Netlify are suitable for development and controlled beta testing.  
+Before handling meaningful public money at scale:
+- Upgrade to Supabase Pro (or higher) for PITR, dedicated resources, SLA
+- Enable automated database backups with tested restoration
+- Consider Supabase read replicas for high traffic
+- Consider dedicated deployment infrastructure for reliability guarantees
+- Review Netlify plan limits for production traffic
+
+---
+
+## 35. Traceability Matrix
+
+| Business Requirement | Routes | API | DB Tables | State Machine | Notifications | Audit Event | Tests |
+|---|---|---|---|---|---|---|---|
+| Customer deposits USDT | `/app/wallet/deposit`, `/app/wallet/deposit/[id]` | `POST /api/deposits`, `/submit`, `/approve`, `/reject` | `deposits`, `ledger_*`, `account_balances` | Deposit SM | `DEPOSIT_*` | `DEPOSIT_*` | `deposits.test.ts` |
+| Customer creates payment | `/app/pay/*`, `/app/orders/[id]` | `POST /api/quotes`, `/api/orders` | `payment_orders`, `ledger_*` | Order SM | `ORDER_*` | `ORDER_CREATED` | `orders.test.ts` |
+| Agent claims order | `/agent/orders`, `/agent/orders/[id]` | `POST /api/orders/:id/claim` | `payment_orders` | Order SM | `ORDER_ASSIGNED` | `ORDER_CLAIMED` | `concurrency.test.ts` |
+| Agent submits payment | `/agent/orders/[id]` | `POST /api/orders/:id/payment` | `payment_orders` | Order SM | `ORDER_PAYMENT_SUBMITTED` | `PAYMENT_SUBMITTED` | `orders.test.ts` |
+| Manager approves payment | `/ops/payments/[id]` | `POST /api/orders/:id/approve` | `payment_orders`, `agent_settlements`, `ledger_*` | Order SM | `ORDER_COMPLETED`, `AGENT_SETTLEMENT_PENDING` | `PAYMENT_APPROVED`, `SETTLEMENT_POSTED` | `integration/payments.test.ts` |
+| Agent settlement | Auto after approval | (internal) | `agent_settlements`, `commission_records`, `ledger_*` | — | `AGENT_COMMISSION_CREDITED` | `COMMISSION_POSTED` | `settlements.test.ts` |
+| Agent withdrawal | `/agent/withdraw`, `/agent/withdrawals` | `POST /api/agent/withdrawals`, `/approve`, `/pay` | `agent_withdrawals`, `ledger_*` | Withdrawal SM | `WITHDRAWAL_*` | `WITHDRAWAL_*` | `withdrawals.test.ts` |
+| Referral reward | `/app/referrals`, `/agent/partners` | `POST /api/referrals/claim` | `referral_relationships`, `referral_rewards` | — | `REFERRAL_REWARD_*` | `REFERRAL_*` | `referrals.test.ts` |
+| Admin approves withdrawal | `/admin/withdrawals` | `POST /api/agent/withdrawals/:id/approve` | `agent_withdrawals` | Withdrawal SM | `WITHDRAWAL_APPROVED` | `WITHDRAWAL_APPROVED` | `withdrawals.test.ts` |
+| Treasury reconciliation | `/admin/treasury`, `/admin/reconciliation` | — | `treasury_balance_snapshots`, `account_balances` | — | Admin alert | `RECONCILIATION_*` | `treasury.test.ts` |
+| Rate change | `/admin/rates` | `PUT /api/admin/rates` | `app_settings`, `setting_history` | — | Admin/ops | `RATE_CHANGED` | `settings.test.ts` |
+| Emergency controls | `/admin/emergency` | `POST /api/admin/emergency` | `app_settings` | — | Admin Telegram | `EMERGENCY_*` | `emergency.test.ts` |
+| Telegram notifications | — | `/api/telegram/webhook` | `telegram_messages` | — | — | `TELEGRAM_*` | `telegram.test.ts` |
+| Audit trail | All sensitive routes | All mutations | `audit_log` | — | — | All actions | `audit.test.ts` |
+
+---
+
+## 36. Development Order
+
+### Phase 1: Foundation (Weeks 1–2)
+```
+1.1  Repository setup (pnpm, TypeScript, ESLint, Prettier)
+1.2  Next.js project structure (route groups, layouts)
+1.3  Tailwind + design tokens + component primitives
+1.4  Supabase local setup + migration 001–004 (extensions, enums, profiles, roles)
+1.5  Authentication (Supabase Auth, middleware, session cookies)
+1.6  Basic layouts (public, customer, agent, ops, admin)
+```
+
+### Phase 2: Design System (Weeks 2–3)
+```
+2.1  All base UI components (Button, Input, Select, etc.)
+2.2  GlassCard, dark mode, reduced motion
+2.3  Financial components (MoneyDisplay, BalanceDisplay, CountdownTimer)
+2.4  Navigation components (mobile tab bar, desktop sidebar)
+2.5  Empty states, error states, skeleton loaders
+2.6  Toast/notification system
+```
+
+### Phase 3: Database Core (Week 3)
+```
+3.1  Migration 005–006 (wallets, ledger)
+3.2  Ledger service (server-side only)
+3.3  Account balance triggers and functions
+3.4  Financial formula library (decimal.js)
+3.5  Unit tests for formulas and invariants
+```
+
+### Phase 4: Customer Features (Weeks 4–5)
+```
+4.1  Customer dashboard
+4.2  Deposit flow (create, submit TX hash)
+4.3  Migration 007 (deposits)
+4.4  Deposit API routes
+4.5  Quote + payment order flow
+4.6  Migration 008 (payment orders)
+4.7  Order API routes (create, quote)
+4.8  Order tracking page (realtime)
+4.9  Activity / transaction history
+4.10 Customer wallet page
+```
+
+### Phase 5: Agent Features (Weeks 5–6)
+```
+5.1  Agent onboarding flow
+5.2  Migration 009 (agents, training)
+5.3  Agent marketplace (realtime)
+5.4  Order claim (atomic, concurrency-safe)
+5.5  Payment submission flow
+5.6  Agent wallet page
+5.7  Agent earnings + performance
+```
+
+### Phase 6: Manager Portal (Weeks 6–7)
+```
+6.1  Deposit review queue + detail
+6.2  Deposit approval/rejection flow (with ledger)
+6.3  Payment verification queue + detail
+6.4  Payment approval flow (with settlement)
+6.5  Migration 010–011 (settlements, commissions)
+6.6  User management (freeze, escalate)
+6.7  Agent management (limit, suspend)
+6.8  Dispute basic flow
+6.9  Support ticket system
+```
+
+### Phase 7: Agent Withdrawals (Week 7)
+```
+7.1  Withdrawal request flow
+7.2  Withdrawal API (request, approve, pay)
+7.3  Withdrawal state machine
+7.4  Admin withdrawal review
+```
+
+### Phase 8: Admin Portal (Weeks 8–9)
+```
+8.1  Admin dashboard + metrics
+8.2  Rate management + profitability calculator
+8.3  Fee + commission settings
+8.4  Treasury control center
+8.5  Reconciliation workflow
+8.6  Emergency controls
+8.7  Audit log viewer
+8.8  User/agent detail pages
+8.9  Reports + CSV export
+8.10 Global search
+```
+
+### Phase 9: Referrals (Week 9)
+```
+9.1  Referral code generation + attribution
+9.2  Migration 012 (referrals)
+9.3  Customer referral pages
+9.4  Agent partner pages
+9.5  Referral reward engine (server-side)
+9.6  Anti-fraud checks
+9.7  Admin referral management
+```
+
+### Phase 10: Notifications + Telegram (Week 10)
+```
+10.1  Migration 013–014 (notifications, telegram)
+10.2  In-app notification center
+10.3  Notification service (template rendering)
+10.4  Supabase Realtime configuration
+10.5  Telegram bot setup + webhook
+10.6  Account linking flow
+10.7  Command handlers
+10.8  All notification event wiring
+```
+
+### Phase 11: Public Website (Week 11)
+```
+11.1  Homepage (hero, features, how-it-works)
+11.2  About, fees, security, agents pages
+11.3  FAQ + contact
+11.4  Status page
+11.5  All legal pages (placeholder structure)
+11.6  Login/register pages
+11.7  SEO metadata
+```
+
+### Phase 12: Security + Hardening (Week 12)
+```
+12.1  Rate limiting on all sensitive endpoints
+12.2  Audit log completeness review
+12.3  RLS policy audit (all tables)
+12.4  Security headers verification
+12.5  File upload security
+12.6  Session security review
+12.7  Input validation review (Zod schemas)
+12.8  Idempotency review
+12.9  Concurrency tests
+12.10 Security penetration checklist
+```
+
+### Phase 13: Testing + QA (Week 13)
+```
+13.1  Complete unit test suite
+13.2  Integration tests (all flows)
+13.3  E2E tests (customer, agent, manager, admin journeys)
+13.4  Financial invariant tests
+13.5  Concurrency tests
+13.6  Security/RLS tests
+13.7  Performance testing
+```
+
+### Phase 14: Deployment + Production (Week 14)
+```
+14.1  Netlify production setup
+14.2  Cloudflare DNS + security
+14.3  Production environment variables
+14.4  Production database migrations
+14.5  Go-live checklist completion
+14.6  Monitoring setup
+14.7  Legal review (LEGAL REVIEW REQUIRED)
+14.8  Compliance review (LEGAL REVIEW REQUIRED)
+14.9  Soft launch (controlled group)
+14.10 Public launch
+```
+
+---
+
+## Appendix A: Coding Standards
+
+### TypeScript
+
+```typescript
+// Prefer explicit return types on all exported functions
+export function calculateFee(amount: Decimal, rate: Decimal): Decimal { ... }
+
+// Use Zod for all input validation
+const depositSchema = z.object({
+  network: z.enum(['TRON', 'ETHEREUM', 'BNB_SMART_CHAIN', 'POLYGON']),
+  expected_amount: z.string().regex(/^\d+(\.\d{1,18})?$/),
+  idempotency_key: z.string().uuid(),
+});
+
+// Never use 'any' — use 'unknown' and narrow
+function processWebhook(body: unknown) {
+  const update = telegramUpdateSchema.parse(body);
+  // ...
+}
+
+// Financial amounts are always strings in API contracts, Decimal in calculations
+type ApiMoneyAmount = string;  // "54.64480874"
+```
+
+### Database Queries
+
+```typescript
+// Always use typed Supabase queries
+const { data, error } = await supabase
+  .from('deposits')
+  .select('id, display_id, status, expected_amount')
+  .eq('user_id', userId)
+  .eq('status', 'PENDING_VERIFICATION')
+  .order('created_at', { ascending: true });
+
+if (error) throw error;
+// data is typed automatically
+
+// Never construct SQL strings manually
+// Never bypass RLS by using service role for user data queries
+```
+
+### Error Handling
+
+```typescript
+// Financial operations: always structured errors
+class FinancialError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly entityType: string,
+    public readonly entityId: string,
+    public readonly correlationId: string,
+  ) {
+    super(message);
+    this.name = 'FinancialError';
+  }
+}
+
+// API routes: structured error responses
+return Response.json(
+  { error: 'INSUFFICIENT_BALANCE', message: 'Insufficient available balance.' },
+  { status: 400 }
+);
+```
+
+### Commits
+
+```
+feat: add agent payment submission flow
+fix: correct USDT decimal precision in settlement calculation
+test: add concurrency tests for order claiming
+docs: update deposit flow in PRD
+chore: upgrade supabase-js to 2.x
+```
+
+---
+
+## Appendix B: PWA Configuration
+
+`public/manifest.json`:
+```json
+{
+  "name": "TetherPay",
+  "short_name": "TetherPay",
+  "description": "Earn in USDT. Spend in INR.",
+  "start_url": "/app/dashboard",
+  "display": "standalone",
+  "background_color": "#F5F7FA",
+  "theme_color": "#16A6A3",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
+```
+
+Offline shell: service worker caches app shell, not financial data.  
+Financial data always fetched fresh from server.
+
+---
+
+## Appendix C: Incident Response Procedures
+
+### C.1 Treasury Mismatch
+
+```
+Detection:    Automated reconciliation shows MISMATCH
+Immediate:    Treasury admin alerted via Telegram
+              Pause new withdrawals (emergency control)
+Investigation: Review all ledger entries since last MATCHED reconciliation
+              Identify discrepancy source
+              Check for off-ledger operations
+Resolution:   Correct ledger via manual adjustment (requires approval)
+              Document in reconciliation case
+              Restore normal operations
+Post-incident: Review process for prevention
+```
+
+### C.2 Suspected Account Takeover
+
+```
+Detection:    Unusual login location, security event
+Immediate:    Freeze affected account
+              Revoke all active sessions
+Alert:        User notification via Telegram/email
+Investigation: Review audit log for recent actions
+               Check for unauthorized transactions
+Resolution:   Coordinate with user for identity verification
+              Restore account after verification
+              Reverse any unauthorized transactions via manual adjustment
+```
+
+### C.3 Duplicate Deposit Credit
+
+```
+Detection:    Idempotency check failure, reconciliation mismatch
+Immediate:    No customer-facing action until verified
+Investigation: Review both deposit records
+              Verify blockchain TX
+Resolution:   Apply manual adjustment to reverse duplicate credit
+              Requires two approvals
+              Full audit trail required
+```
+
+### C.4 Compromised Admin Account
+
+```
+Immediate:    Revoke all sessions for compromised account
+              Disable account
+              Alert OWNER/SUPER_ADMIN
+              Freeze all pending approvals from that account
+Investigation: Audit log review of all actions in past 72h
+              Identify any unauthorized approvals
+Resolution:   Reverse unauthorized actions via adjustment workflow
+              Re-enable account after credential reset and 2FA re-enrollment
+              Security review
+```
+
+---
+
+*End of TetherPay Master Repository Specification v1.0.0*
+
+---
+
+> **FINAL NOTE TO IMPLEMENTING ENGINEERS:**  
+> This PRD is the single source of truth. Any deviation from the architecture, database design, state machines, financial formulas, or security model described here must be accompanied by a corresponding update to this document. Do not treat this as guidance — treat it as the implementation specification.
+
+> **FINAL NOTE ON COMPLIANCE:**  
+> Technical implementation of this system does not establish any legal right to operate a VDA service, payment service, or financial service in India or any other jurisdiction. Before any real-money public launch, qualified legal and regulatory counsel must confirm the complete operating structure. All LEGAL/COMPLIANCE REVIEW REQUIRED markers throughout this document identify areas requiring professional legal assessment.
+ENDOFPRD

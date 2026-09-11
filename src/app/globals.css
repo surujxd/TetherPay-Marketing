@@ -1,0 +1,323 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-3xl: 28px;
+}
+
+:root {
+  /* TetherPay — Light mode (premium fintech + liquid glass) */
+  --background: #F5F7FA;
+  --foreground: #111827;
+  --card: #FFFFFF;
+  --card-foreground: #111827;
+  --popover: #FFFFFF;
+  --popover-foreground: #111827;
+
+  /* Brand accent — teal */
+  --primary: #16A6A3;
+  --primary-foreground: #FFFFFF;
+  --accent: #16A6A3;
+  --accent-foreground: #FFFFFF;
+  --accent-light: #E0F7F6;
+  --accent-dark: #0D7E7C;
+
+  --secondary: #F1F4F8;
+  --secondary-foreground: #111827;
+  --muted: #EEF1F5;
+  --muted-foreground: #667085;
+  --border: rgba(17, 24, 39, 0.08);
+  --input: rgba(17, 24, 39, 0.10);
+  --ring: #16A6A3;
+
+  /* Semantic */
+  --success: #16A34A;
+  --success-light: #DCFCE7;
+  --warning: #D97706;
+  --warning-light: #FEF3C7;
+  --danger: #DC2626;
+  --danger-light: #FEE2E2;
+  --info: #2563EB;
+  --info-light: #DBEAFE;
+
+  /* Glass surfaces */
+  --glass-bg: rgba(255, 255, 255, 0.70);
+  --glass-border: rgba(255, 255, 255, 0.40);
+  --glass-highlight: rgba(255, 255, 255, 0.55);
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-sm: 0 2px 4px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.10), 0 4px 8px rgba(0,0,0,0.06);
+  --shadow-xl: 0 16px 48px rgba(0,0,0,0.12), 0 8px 16px rgba(0,0,0,0.08);
+  --shadow-glass: 0 8px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5);
+  --shadow-accent: 0 8px 30px rgba(22, 166, 163, 0.25);
+
+  --radius: 16px;
+
+  --chart-1: #16A6A3;
+  --chart-2: #0D7E7C;
+  --chart-3: #16A34A;
+  --chart-4: #D97706;
+  --chart-5: #667085;
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #111827;
+  --sidebar-primary: #16A6A3;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #E0F7F6;
+  --sidebar-accent-foreground: #0D7E7C;
+  --sidebar-border: rgba(17, 24, 39, 0.08);
+  --sidebar-ring: #16A6A3;
+}
+
+.dark {
+  /* TetherPay — Dark mode (premium fintech + liquid glass) */
+  --background: #070A0E;
+  --foreground: #E6EAF0;
+  --card: #0F1419;
+  --card-foreground: #E6EAF0;
+  --popover: #0F1419;
+  --popover-foreground: #E6EAF0;
+
+  --primary: #1FC4C0;
+  --primary-foreground: #04121B;
+  --accent: #1FC4C0;
+  --accent-foreground: #04121B;
+  --accent-light: rgba(31, 196, 192, 0.12);
+  --accent-dark: #0D7E7C;
+
+  --secondary: #161C24;
+  --secondary-foreground: #E6EAF0;
+  --muted: #11161D;
+  --muted-foreground: #9CA3AF;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #1FC4C0;
+
+  --success: #22C55E;
+  --success-light: rgba(34, 197, 94, 0.12);
+  --warning: #F59E0B;
+  --warning-light: rgba(245, 158, 11, 0.12);
+  --danger: #EF4444;
+  --danger-light: rgba(239, 68, 68, 0.12);
+  --info: #3B82F6;
+  --info-light: rgba(59, 130, 246, 0.12);
+
+  --glass-bg: rgba(15, 20, 25, 0.70);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.06);
+
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-sm: 0 2px 4px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.45), 0 2px 4px rgba(0,0,0,0.3);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.35);
+  --shadow-xl: 0 16px 48px rgba(0,0,0,0.55), 0 8px 16px rgba(0,0,0,0.4);
+  --shadow-glass: 0 8px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06);
+  --shadow-accent: 0 8px 30px rgba(31, 196, 192, 0.30);
+
+  --chart-1: #1FC4C0;
+  --chart-2: #22D3EE;
+  --chart-3: #22C55E;
+  --chart-4: #F59E0B;
+  --chart-5: #9CA3AF;
+  --sidebar: #0F1419;
+  --sidebar-foreground: #E6EAF0;
+  --sidebar-primary: #1FC4C0;
+  --sidebar-primary-foreground: #04121B;
+  --sidebar-accent: rgba(31, 196, 192, 0.12);
+  --sidebar-accent-foreground: #1FC4C0;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #1FC4C0;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01", "ss03";
+    letter-spacing: -0.011em;
+  }
+  ::selection {
+    background: var(--accent);
+    color: var(--primary-foreground);
+  }
+}
+
+/* === TetherPay utility layers === */
+@layer utilities {
+  /* Glass surfaces */
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-glass);
+  }
+  .glass-strong {
+    background: color-mix(in oklab, var(--glass-bg) 88%, transparent);
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-glass);
+  }
+  .glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-lg), inset 0 1px 0 var(--glass-highlight);
+  }
+  .text-balance { text-wrap: balance; }
+  .text-pretty { text-wrap: pretty; }
+
+  /* Gradient text */
+  .text-gradient-accent {
+    background: linear-gradient(120deg, var(--accent), var(--accent-dark));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Mesh / aurora backgrounds */
+  .bg-aurora {
+    background:
+      radial-gradient(60% 50% at 15% 10%, rgba(22,166,163,0.18), transparent 60%),
+      radial-gradient(50% 45% at 85% 5%, rgba(31,196,192,0.14), transparent 55%),
+      radial-gradient(55% 50% at 50% 100%, rgba(13,126,124,0.16), transparent 60%);
+  }
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, var(--border) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+  .bg-dots {
+    background-image: radial-gradient(var(--border) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+
+  /* Shadows */
+  .shadow-glass { box-shadow: var(--shadow-glass); }
+  .shadow-accent { box-shadow: var(--shadow-accent); }
+  .shadow-soft { box-shadow: var(--shadow-md); }
+  .shadow-float { box-shadow: var(--shadow-xl); }
+
+  /* Mono numerals for financial displays */
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+
+  /* Animated shimmer for skeletons / accents */
+  .shimmer {
+    background: linear-gradient(110deg, transparent 30%, var(--glass-highlight) 50%, transparent 70%);
+    background-size: 220% 100%;
+    animation: shimmer 2.4s ease-in-out infinite;
+  }
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Marquee */
+  .animate-marquee {
+    animation: marquee 38s linear infinite;
+  }
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  /* Float */
+  .animate-float {
+    animation: float 7s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-12px); }
+  }
+
+  /* Pulse-ring for status dots */
+  .animate-pulse-ring::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: currentColor;
+    opacity: 0.5;
+    animation: pulse-ring 2s ease-out infinite;
+  }
+  @keyframes pulse-ring {
+    0% { transform: scale(1); opacity: 0.5; }
+    100% { transform: scale(2.6); opacity: 0; }
+  }
+
+  /* Scrollbar styling */
+  .scroll-area {
+    scrollbar-width: thin;
+    scrollbar-color: var(--muted-foreground) transparent;
+  }
+  .scroll-area::-webkit-scrollbar { width: 8px; height: 8px; }
+  .scroll-area::-webkit-scrollbar-track { background: transparent; }
+  .scroll-area::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--muted-foreground) 35%, transparent);
+    border-radius: 9999px;
+  }
+  .scroll-area::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}

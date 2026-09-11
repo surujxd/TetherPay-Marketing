@@ -1,0 +1,60 @@
+// TetherPay — Prisma schema (SQLite)
+// Note: SQLite has no native DECIMAL type. All financial amounts are stored as
+// strings and processed with decimal.js in application code (PRD §4.3 / §11.6).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// Platform-wide rate / fee / commission settings snapshot (PRD §24).
+/// Stored as key/value so the rate engine can read live values.
+model RateSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  unit      String? // "inr_per_usdt" | "percent" | "inr" | "usdt"
+  note      String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@index([key])
+}
+
+/// Newsletter / launch waitlist subscribers.
+model Subscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  role      String   @default("customer") // customer | agent
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+/// Contact / sales inquiries from the public website.
+model ContactInquiry {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  topic     String   @default("general") // general | agents | support | press
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([createdAt])
+}
+
+/// Lightweight analytics event log (e.g. calculator usage) — opt-in, anonymized.
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  event     String
+  payload   String? // JSON string
+  createdAt DateTime @default(now())
+
+  @@index([event])
+  @@index([createdAt])
+}
