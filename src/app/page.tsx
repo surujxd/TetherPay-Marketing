@@ -1,4 +1,5 @@
 import { ScrollProgress } from '@/components/site/scroll-progress'
+import { BackToTop } from '@/components/site/back-to-top'
 import { AuroraBackground } from '@/components/site/primitives'
 import { Navbar } from '@/components/site/navbar'
 import { Hero } from '@/components/site/hero'
@@ -10,6 +11,7 @@ import { NetworkChooser } from '@/components/site/network-chooser'
 import { RateCalculator } from '@/components/site/rate-calculator'
 import { RateExplainer } from '@/components/site/rate-explainer'
 import { AgentCalculator } from '@/components/site/agent-calculator'
+import { WithdrawalCalculator } from '@/components/site/withdrawal-calculator'
 import { OrderBook } from '@/components/site/order-book'
 import { DashboardPreview } from '@/components/site/dashboard-preview'
 import { TreasuryMetrics } from '@/components/site/treasury-metrics'
@@ -20,6 +22,7 @@ import { StatusBoard } from '@/components/site/status-board'
 import { ReferralPanel } from '@/components/site/referral-panel'
 import { AgentCta } from '@/components/site/agent-cta'
 import { Faq } from '@/components/site/faq'
+import { GlossarySection } from '@/components/site/glossary-section'
 import { BlogPreview } from '@/components/site/blog-preview'
 import { ContactCta } from '@/components/site/contact'
 import { Footer } from '@/components/site/footer'
@@ -41,6 +44,7 @@ export default function Home() {
         <RateCalculator />
         <RateExplainer />
         <AgentCalculator />
+        <WithdrawalCalculator />
         <OrderBook />
         <DashboardPreview />
         <TreasuryMetrics />
@@ -51,11 +55,13 @@ export default function Home() {
         <ReferralPanel />
         <AgentCta />
         <Faq />
+        <GlossarySection />
         <BlogPreview />
         <ContactCta />
       </main>
 
       <Footer />
+      <BackToTop />
     </div>
   )
 }

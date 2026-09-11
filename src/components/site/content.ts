@@ -19,6 +19,7 @@ export const NAV_LINKS = [
   { label: 'For Agents', href: '#agents' },
   { label: 'Compare', href: '#features' },
   { label: 'Referrals', href: '#referrals' },
+  { label: 'Glossary', href: '#glossary' },
   { label: 'Resources', href: '#resources' },
   { label: 'Status', href: '#status' },
   { label: 'FAQ', href: '#faq' },

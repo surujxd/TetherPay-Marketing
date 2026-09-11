@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Text \"Pick the right chain for your deposit\" overlaps with the \"Network chooser\" button and the bottom navigation icon.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789108213,
+  "id": "20260911143011c0737e6a37a94003",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260911143011c0737e6a37a94003",
+  "usage": {
+    "completion_tokens": 25,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 455,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 480
+  }
+}

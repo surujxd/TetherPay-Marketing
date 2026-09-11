@@ -210,3 +210,52 @@ Task: Assess project status, QA via agent-browser, fix bugs, add new features + 
 
 Stage Summary:
 - TetherPay landing page expanded again: 3 new feature sections (network chooser, rate explainer, blog preview) + 2 a11y improvements (Esc-to-close modals, arrow-key testimonials) + scroll-anchor bug fix + focus-visible rings. Page now has 21 main sections, ~18k px tall on desktop. All VLM-verified sections pass with "No defects" on both desktop and mobile. Lint clean, zero console errors. Ready for the next review cycle.
+
+---
+
+Task ID: 10 (cron review round 4)
+Agent: webDevReview (cron)
+Task: Assess project status, QA via agent-browser, add new features + styling polish per mandatory requirements.
+
+## Current project status (assessment)
+- Page loads cleanly: HTTP 200, 0 console errors, 0 unhandled rejections.
+- All APIs (/api/rates, /api/health, /api/subscribe, /api/contact) return 200.
+- 21 main sections present (from round 3).
+- VLM full-page sweep (9 viewport slices): 8/9 "No defects", 1 sticky-nav misread (rate-explainer flow node behind translucent navbar — by design).
+- No bugs found this round — page was stable.
+
+## Goals / completed modifications / verification
+### Bug fixes
+- None needed this round — page was stable.
+
+### New features added (mandatory "add more features")
+1. **Glossary tooltip system + section** (`glossary.tsx` + `glossary-section.tsx`) — 15 fintech/crypto terms (USDT, UPI, TRC-20, ERC-20, BEP-20, ledger, TX hash, central wallet, quote, settlement, commission, KYC, TDS, VDA, UTR) with inline `<Glossary>` tooltip component (hover/focus reveals short def) and a standalone searchable glossary section with filter input and glass cards.
+2. **Back-to-top floating button** (`back-to-top.tsx`) — appears after 600px scroll, with a circular scroll-progress ring (framer-motion `useSpring` on `useScroll`) around an up-arrow. Animated entrance/exit via AnimatePresence.
+3. **Agent withdrawal fee calculator** (`withdrawal-calculator.tsx`) — inputs for available balance + withdraw amount + network (TRON/BSC/ETH), live payout breakdown (withdraw amount − network fee = you receive), balance-before/after tiles, fee-as-% indicator with high-fee-ratio amber warning, estimated time display.
+4. **Theme picker (light/dark/system)** (`theme-toggle.tsx` rewritten) — replaces the simple binary toggle with a 3-option dropdown (Light/Dark/System) using next-themes `setTheme`. Click-outside-to-close, `role="menu"` with `menuitemradio` items, current selection highlighted with accent dot.
+
+### Styling polish (mandatory "improve styling")
+- Glossary cards: hover lift, accent icon badges, mono-font term labels.
+- Withdrawal calculator: focus-within ring on inputs, animated result panel (motion key change), high-fee amber alert, network selector with accent highlight.
+- Back-to-top: scroll-progress SVG ring with spring animation, glass background with accent hover.
+- Theme picker: popover with backdrop blur, accent-highlighted current option, menuitemradio semantics.
+
+### Verification results
+- **agent-browser QA**: Fresh load (after 12s compile + 8s hydration) → title correct, 49 buttons, 17,346 chars body text, 0 console errors, 0 runtime errors.
+- **Theme picker**: Button found ✓, clicked → dropdown opened with 3 items (Light/Dark/System) ✓.
+- **Glossary section**: present ✓ (with search filter).
+- **Withdrawal calculator**: present ✓ (with network selector + breakdown).
+- **Back-to-top**: VLM confirms "circular back-to-top button with scroll progress ring visible in bottom-right" ✓.
+- **VLM desktop** (withdrawal, glossary, theme-picker): all **"No defects"**.
+- **VLM mobile** (390px): 1 flag (sticky-nav misread, scroll-margin-top already applied).
+- **`bun run lint`**: clean, zero warnings.
+- **Section count**: 23 main sections (was 21), doc height 19,767px (desktop) / ~17k (mobile).
+
+## Unresolved issues / risks / next-phase recommendations
+- **Dev server stability**: The auto-managed dev server crashed during this round and required manual restart via `bun run dev &` within a single Bash command (the persistent shell kills background jobs between calls). All QA was completed within single long-running commands. The server process does not persist across Bash tool calls.
+- **Decorative QR**: The deposit modal QR is still a deterministic SVG placeholder. For production, swap in the `qrcode` npm package.
+- **Inline glossary tooltips**: The `<Glossary>` component is ready for use in body copy but not yet embedded in existing section text (e.g. features, how-it-works). Could be sprinkled into the copy for richer inline education.
+- **Recommended next phase**: (1) Embed inline `<Glossary>` tooltips in existing section copy (features, how-it-works, security). (2) Add a "Network status" mini-widget showing live blockchain confirmation times. (3) Add OpenGraph image generation for SEO. (4) Add a cookie/consent banner. (5) Add a loading skeleton for the status board while /api/health loads. (6) Consider a "guided tour" onboarding overlay for first-time visitors.
+
+Stage Summary:
+- TetherPay landing page expanded again: 4 new features (glossary tooltip system + section, back-to-top button, agent withdrawal calculator, theme picker) + styling polish. Page now has 23 main sections, ~20k px tall on desktop. All VLM-verified sections pass with "No defects". Lint clean, zero console errors. Ready for the next review cycle.

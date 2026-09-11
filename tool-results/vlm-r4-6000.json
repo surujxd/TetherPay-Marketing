@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Text overlap between the introductory sentence and the navigation menu at the top left.\nThe \"₹ 91.00\" value and a forward slash are floating unstyled above the navigation bar on the right.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789107377,
+  "id": "202609111416127a3e6a40eefa427e",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609111416127a3e6a40eefa427e",
+  "usage": {
+    "completion_tokens": 42,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1735,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1777
+  }
+}
