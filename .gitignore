@@ -52,3 +52,7 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# Generated visual QA output and local database files
+/tool-results/
+/db/*.db
