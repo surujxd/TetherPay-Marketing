@@ -15,9 +15,11 @@ import { NetworkChooser } from '@/components/site/network-chooser'
 import { NetworkStatusWidget } from '@/components/site/network-status-widget'
 import { RateCalculator } from '@/components/site/rate-calculator'
 import { RateExplainer } from '@/components/site/rate-explainer'
+import { RateHistoryChart } from '@/components/site/rate-history-chart'
 import { MarketComparison } from '@/components/site/market-comparison'
 import { AgentCalculator } from '@/components/site/agent-calculator'
 import { AgentPricing } from '@/components/site/agent-pricing'
+import { AgentLeaderboard } from '@/components/site/agent-leaderboard'
 import { WithdrawalCalculator } from '@/components/site/withdrawal-calculator'
 import { OrderBook } from '@/components/site/order-book'
 import { DashboardPreview } from '@/components/site/dashboard-preview'
@@ -53,9 +55,11 @@ export default function Home() {
         <NetworkStatusWidget />
         <RateCalculator />
         <RateExplainer />
+        <RateHistoryChart />
         <MarketComparison />
         <AgentCalculator />
         <AgentPricing />
+        <AgentLeaderboard />
         <WithdrawalCalculator />
         <OrderBook />
         <DashboardPreview />

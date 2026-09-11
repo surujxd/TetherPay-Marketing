@@ -7,6 +7,7 @@ import { Menu, X, ArrowRight } from 'lucide-react'
 import { Logo } from './primitives'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { NotificationDemo } from './notification-demo'
+import { LangSelector } from './lang-selector'
 import { NAV_LINKS } from './content'
 import { cn } from '@/lib/utils'
 
@@ -49,6 +50,7 @@ export function Navbar() {
         </div>
 
         <div className="flex items-center gap-2">
+          <LangSelector />
           <NotificationDemo />
           <ThemeToggle />
           <a

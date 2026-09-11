@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
+import { I18nProvider } from "@/components/site/i18n";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -67,9 +68,11 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
-          <Toaster />
-          <SonnerToaster richColors closeButton position="bottom-right" />
+          <I18nProvider>
+            {children}
+            <Toaster />
+            <SonnerToaster richColors closeButton position="bottom-right" />
+          </I18nProvider>
         </ThemeProvider>
       </body>
     </html>

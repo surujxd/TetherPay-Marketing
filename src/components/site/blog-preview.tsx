@@ -4,6 +4,7 @@ import * as React from 'react'
 import { motion } from 'framer-motion'
 import { ArrowRight, ArrowUpRight, Clock } from 'lucide-react'
 import { SectionHeading, GlassCard } from './primitives'
+import { ArticleModal } from './article-modal'
 
 type Article = {
   category: string
@@ -67,6 +68,7 @@ const ARTICLES: Article[] = [
 
 export function BlogPreview() {
   const [featured, ...rest] = ARTICLES
+  const [openArticle, setOpenArticle] = React.useState<Article | null>(null)
   return (
     <section id="resources" className="px-4 py-16 sm:py-24">
       <div className="mx-auto max-w-6xl">
@@ -94,6 +96,7 @@ export function BlogPreview() {
             viewport={{ once: true, margin: '-60px' }}
             transition={{ duration: 0.5 }}
           >
+            <button onClick={() => setOpenArticle(featured)} className="block h-full w-full text-left">
             <GlassCard hover className="group h-full overflow-hidden p-0">
               {/* gradient banner */}
               <div className="relative h-40 overflow-hidden bg-gradient-to-br from-[var(--accent-dark)] to-[var(--accent)]">
@@ -118,6 +121,7 @@ export function BlogPreview() {
                 </div>
               </div>
             </GlassCard>
+            </button>
           </motion.div>
 
           {/* Article list */}
@@ -130,6 +134,7 @@ export function BlogPreview() {
                 viewport={{ once: true, margin: '-40px' }}
                 transition={{ duration: 0.4, delay: i * 0.06 }}
               >
+                <button onClick={() => setOpenArticle(a)} className="block w-full text-left">
                 <GlassCard hover className="group flex items-center gap-4 p-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -144,11 +149,14 @@ export function BlogPreview() {
                   </div>
                   <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground transition-all group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" />
                 </GlassCard>
+                </button>
               </motion.div>
             ))}
           </div>
         </div>
       </div>
+
+      <ArticleModal article={openArticle} open={!!openArticle} onOpenChange={(v) => !v && setOpenArticle(null)} />
     </section>
   )
 }
