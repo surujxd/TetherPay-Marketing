@@ -1,6 +1,8 @@
 import { ScrollProgress } from '@/components/site/scroll-progress'
 import { BackToTop } from '@/components/site/back-to-top'
 import { CookieConsent } from '@/components/site/cookie-consent'
+import { HelpWidget } from '@/components/site/help-widget'
+import { GuidedTour } from '@/components/site/guided-tour'
 import { AuroraBackground } from '@/components/site/primitives'
 import { Navbar } from '@/components/site/navbar'
 import { Hero } from '@/components/site/hero'
@@ -25,6 +27,7 @@ import { Testimonials } from '@/components/site/testimonials'
 import { Security } from '@/components/site/security'
 import { StatusBoard } from '@/components/site/status-board'
 import { ReferralPanel } from '@/components/site/referral-panel'
+import { RateAlertForm } from '@/components/site/rate-alert-form'
 import { AgentCta } from '@/components/site/agent-cta'
 import { Faq } from '@/components/site/faq'
 import { GlossarySection } from '@/components/site/glossary-section'
@@ -62,6 +65,7 @@ export default function Home() {
         <Security />
         <StatusBoard />
         <ReferralPanel />
+        <RateAlertForm />
         <AgentCta />
         <Faq />
         <GlossarySection />
@@ -71,7 +75,9 @@ export default function Home() {
 
       <Footer />
       <BackToTop />
+      <HelpWidget />
       <CookieConsent />
+      <GuidedTour />
     </div>
   )
 }

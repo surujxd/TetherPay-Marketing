@@ -2,8 +2,9 @@
 
 import * as React from 'react'
 import { motion } from 'framer-motion'
-import { Activity, ArrowRight, Clock, TrendingUp, Users } from 'lucide-react'
+import { Activity, ArrowRight, Clock, TrendingUp, Users, Eye } from 'lucide-react'
 import { SectionHeading, GlassCard } from './primitives'
+import { OrderTrackingButton } from './order-tracking-modal'
 import { formatINR } from '@/lib/money'
 
 type Order = {
@@ -166,6 +167,10 @@ export function OrderBook() {
               <ArrowRight className="h-3.5 w-3.5 text-[var(--accent)]" />
               Orders expire after <span className="font-mono font-semibold">10:00</span> if unclaimed
             </div>
+
+            <OrderTrackingButton className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-5 text-sm font-semibold text-[var(--primary-foreground)] shadow-accent transition-all hover:brightness-110 active:scale-[0.98]">
+              <Eye className="h-4 w-4" /> Watch a live order demo
+            </OrderTrackingButton>
           </div>
         </div>
       </div>
