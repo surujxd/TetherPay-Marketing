@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**Left Panel: No.**\nThe left panel does **not** show a number input with '5000' or preset buttons (₹500, ₹2,000). Instead, it displays a large, mostly empty dark area containing only the **TetherPay logo**, a navigation menu (**How it works, Rates, For Agents**), a highlighted button labeled **\"Reserve & lock rate\"**, and a small informational note: *\"Rate locked at quote time — never changes after confirmation.\"*\n\n**Right Panel: Yes.**\nThe right panel **does** show a quote breakdown with numbers. Specifically, it includes:\n*   **USDT debit:** 54.6448 USDT\n*   **Available balance:** 1,248.5040 USDT\n*   **After payment:** 1,193.8592 USDT\n*   **AGENT SETTLEMENT (ILLUSTRATIVE):**\n    *   Base USDT: 54.9451 USDT\n    *   Commission (1.50%): +0.8242 USDT\n    *   Agent receives: 55.7692 USDT\n*   **24H RATE:** ₹91.50 / USDT (with a +0.30 change and a line graph showing the 24h range between ₹90.83 and ₹91.21)",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789106860,
+  "id": "202609111407338323ab88d49b4e3e",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609111407338323ab88d49b4e3e",
+  "usage": {
+    "completion_tokens": 287,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1729,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2016
+  }
+}

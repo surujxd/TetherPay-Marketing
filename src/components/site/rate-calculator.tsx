@@ -90,7 +90,7 @@ export function RateCalculator() {
               </span>
             </div>
 
-            <div className="mt-3 flex items-center gap-2 rounded-2xl border border-border bg-background/50 px-4 py-3 focus-within:ring-2 focus-within:ring-[var(--accent)]">
+            <div className="mt-3 flex items-center gap-2 rounded-2xl border border-border bg-background/50 px-4 py-3 focus-within:border-[var(--accent)] focus-within:ring-2 focus-within:ring-[var(--accent)]">
               <span className="font-mono text-2xl font-semibold text-muted-foreground">₹</span>
               <input
                 type="text"
@@ -100,7 +100,7 @@ export function RateCalculator() {
                   const v = e.target.value.replace(/[^0-9.]/g, '')
                   setInr(v)
                 }}
-                className="w-full bg-transparent font-mono text-3xl font-semibold tabular-nums outline-none placeholder:text-muted-foreground/40"
+                className="w-full bg-transparent font-mono text-3xl font-semibold tabular-nums text-foreground outline-none placeholder:text-muted-foreground/40"
                 placeholder="5000"
                 aria-label="INR amount to pay"
               />

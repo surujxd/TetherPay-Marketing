@@ -158,3 +158,55 @@ Task: Assess project status, QA via agent-browser, fix bugs, add new features + 
 
 Stage Summary:
 - TetherPay landing page expanded again: 4 new feature sections (payment modal, order book, treasury metrics, testimonials) + agent-calc bug fix. Page now has 18 main sections, ~15k px tall on desktop. All VLM-verified sections pass with "No defects" on both desktop and mobile. Lint clean, zero console errors. Ready for the next review cycle.
+
+---
+
+Task ID: 9 (cron review round 3)
+Agent: webDevReview (cron)
+Task: Assess project status, QA via agent-browser, fix bugs, add new features + styling polish per mandatory requirements.
+
+## Current project status (assessment)
+- Page loads cleanly: HTTP 200, readyState complete, 0 console errors, 0 unhandled rejections.
+- All APIs (/api/rates, /api/health, /api/subscribe, /api/contact) return 200.
+- 18 main sections present (from round 2).
+- VLM full-page sweep (9 viewport slices) flagged mostly sticky-nav misreads, but identified a REAL UX bug: when navigating to `#calculator` (or any anchored section), the sticky navbar overlapped the section's top content (heading, input, presets) making the left panel appear "empty" in screenshots.
+
+## Goals / completed modifications / verification
+### Bug fixes
+- **Scroll-anchor offset** (real UX bug): Added `section[id] { scroll-margin-top: 96px; }` to globals.css so anchored sections aren't covered by the sticky navbar when navigated to via hash links. VLM now returns "No defects" for the calculator section.
+- **Focus-visible rings** (a11y): Added `:focus-visible` outline rules for all interactive elements (buttons, links, inputs, textareas, selects) using the teal accent — keyboard navigation now has clear visual focus indicators.
+
+### New features added (mandatory "add more features")
+1. **Network chooser interactive** (`network-chooser.tsx`, PRD §14.3) — TRON/BSC/ETH comparison with selectable cards showing fee, time, reliability, and recommended badge. Live cost preview panel that recalculates "credited to ledger" (deposit − network fee) when the network or amount changes. Includes a high-fee-ratio warning (amber alert when fee > 1.5% of deposit), 3 mini stat tiles (speed/reliability/fee), and a cross-network safety warning. Animated selection indicator with `layoutId`.
+2. **"How rates work" animated explainer** (`rate-explainer.tsx`) — 3-tab interactive (Customer rate / Agent rate / The spread) showing the same ₹5000 payment from three perspectives with animated flow diagrams (FlowNode → FlowArrow → FlowNode). The spread tab includes a positive/negative spread indicator with trending-up/down icons and a warning when the configuration produces a loss (PRD §11.3). Bottom legend with 3 quick-reference stats.
+3. **Blog/resources preview section** (`blog-preview.tsx`) — 1 featured article (with gradient banner + category badge + read time) + 5 article cards in a list with category-colored labels, excerpts, read times, and hover arrow animations. 6 articles across Engineering/Product/Agents/Compliance/Security/Guide categories.
+4. **Keyboard navigation** (a11y, mandatory):
+   - Esc-to-close on both modals (deposit + payment), disabled during the "confirming" step to prevent accidental abort.
+   - Arrow-key navigation on the testimonials carousel (left/right) when the section is focused, with `tabIndex={0}` and `aria-label`.
+
+### Styling polish (mandatory "improve styling")
+- Scroll-margin-top on all anchored sections for clean hash navigation.
+- Focus-visible teal outlines on all interactive elements.
+- Network chooser: animated `layoutId` selection bar, gradient network-color badges, amber fee-ratio warning.
+- Rate explainer: gradient FlowNode cards with dots texture, animated tab transitions (AnimatePresence), positive/negative spread color coding.
+- Blog: gradient featured banner with dots texture, category color coding, line-clamp excerpts, hover arrow translate.
+- Navbar: tightened to `xl:flex` with reduced padding (`px-2.5`, `text-[13px]`) to fit 8 nav links cleanly; hamburger now appears below xl breakpoint.
+
+### Verification results
+- **agent-browser QA**: Fresh load → 0 console errors, 0 unhandled rejections, **21 main sections** (was 18), doc height 17,834px (desktop) / 26,787px (mobile).
+- **Network chooser**: Clicked BSC card → cost preview recalculated, "Credited to ledger" updated. ✓
+- **Rate explainer**: Clicked "The spread" tab → "Platform spread" + positive/negative indicator rendered. ✓
+- **Esc-to-close**: Opened deposit modal → pressed Esc → modal closed. ✓
+- **VLM desktop** (network, rate-explainer, blog, calc-fixed): all **"No defects"**.
+- **VLM mobile** (390px): **"No defects"** — fully responsive, 21 sections stack cleanly.
+- **`bun run lint`**: clean, zero warnings.
+- **dev.log**: all routes 200, no runtime errors.
+
+## Unresolved issues / risks / next-phase recommendations
+- **Decorative QR**: The deposit modal QR is still a deterministic SVG placeholder. For production, swap in the `qrcode` npm package.
+- **Blog articles are placeholders**: No real article pages exist (only the `/` route is visible per project constraints). In a multi-route setup, each card would link to a dedicated article page.
+- **Rate explainer uses fixed rates**: The explainer hardcodes customer_rate=91.5, agent_rate=91.0, commission=1.5 for clarity. Could be wired to the live `/api/rates` endpoint, but that would make the explainer less predictable for educational purposes.
+- **Recommended next phase**: (1) Add a "Network status" mini-widget showing live blockchain confirmation times. (2) Add a "Fee calculator" for agent withdrawal costs. (3) Add a glossary/terminology tooltip system for jargon (USDT, UPI, TRC-20, etc.). (4) Add a dark/light/system theme picker (currently just toggle). (5) Add a "Back to top" floating button. (6) Consider a real OG image for SEO.
+
+Stage Summary:
+- TetherPay landing page expanded again: 3 new feature sections (network chooser, rate explainer, blog preview) + 2 a11y improvements (Esc-to-close modals, arrow-key testimonials) + scroll-anchor bug fix + focus-visible rings. Page now has 21 main sections, ~18k px tall on desktop. All VLM-verified sections pass with "No defects" on both desktop and mobile. Lint clean, zero console errors. Ready for the next review cycle.

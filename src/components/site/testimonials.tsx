@@ -54,6 +54,7 @@ const PRESS = [
 export function Testimonials() {
   const [idx, setIdx] = React.useState(0)
   const [paused, setPaused] = React.useState(false)
+  const sectionRef = React.useRef<HTMLElement>(null)
 
   React.useEffect(() => {
     if (paused) return
@@ -61,10 +62,30 @@ export function Testimonials() {
     return () => clearInterval(id)
   }, [paused])
 
+  // Arrow-key navigation when the section is focused/hovered
+  React.useEffect(() => {
+    const el = sectionRef.current
+    if (!el) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        setIdx((i) => (i - 1 + TESTIMONIALS.length) % TESTIMONIALS.length)
+      } else if (e.key === 'ArrowRight') {
+        setIdx((i) => (i + 1) % TESTIMONIALS.length)
+      }
+    }
+    el.addEventListener('keydown', onKey)
+    return () => el.removeEventListener('keydown', onKey)
+  }, [])
+
   const t = TESTIMONIALS[idx]
 
   return (
-    <section className="px-4 py-16 sm:py-24">
+    <section
+      ref={sectionRef}
+      tabIndex={0}
+      aria-label="Testimonials"
+      className="px-4 py-16 sm:py-24 focus:outline-none"
+    >
       <div className="mx-auto max-w-5xl">
         <SectionHeading
           eyebrow="Loved by users"

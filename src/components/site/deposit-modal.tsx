@@ -54,6 +54,16 @@ function DepositModal({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
   const [copied, setCopied] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
 
+  // Esc to close (keyboard accessibility)
+  React.useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && step !== 3) onOpenChange(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, step, onOpenChange])
+
   // reset when closed
   React.useEffect(() => {
     if (!open) {

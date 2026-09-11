@@ -44,6 +44,16 @@ function PaymentModal({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
   const [inrAmount, setInrAmount] = React.useState('2500')
   const [confirming, setConfirming] = React.useState(false)
 
+  // Esc to close (keyboard accessibility)
+  React.useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && step !== 3) onOpenChange(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, step, onOpenChange])
+
   React.useEffect(() => {
     if (!open) {
       const t = setTimeout(() => {

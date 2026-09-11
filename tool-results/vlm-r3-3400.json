@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "*   Text overlap at the top of the right panel where \"USDT debit\" and the amount \"54.8446 USDT\" are overlapping with \"Available\" and its corresponding value.\n*   The left-side card area is largely empty, appearing as an unfinished or missing component compared to the populated right-side panel.\n*   Inconsistent vertical alignment between the \"Earnings Estimator\" section and the \"Provide INR liquidity\" heading on the left.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789106776,
+  "id": "202609111405534ff7f48f5f594f25",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609111405534ff7f48f5f594f25",
+  "usage": {
+    "completion_tokens": 95,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1735,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1830
+  }
+}

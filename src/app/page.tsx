@@ -6,7 +6,9 @@ import { ActivityTicker } from '@/components/site/activity-ticker'
 import { TrustBar } from '@/components/site/trust-bar'
 import { Features } from '@/components/site/features'
 import { HowItWorks } from '@/components/site/how-it-works'
+import { NetworkChooser } from '@/components/site/network-chooser'
 import { RateCalculator } from '@/components/site/rate-calculator'
+import { RateExplainer } from '@/components/site/rate-explainer'
 import { AgentCalculator } from '@/components/site/agent-calculator'
 import { OrderBook } from '@/components/site/order-book'
 import { DashboardPreview } from '@/components/site/dashboard-preview'
@@ -18,6 +20,7 @@ import { StatusBoard } from '@/components/site/status-board'
 import { ReferralPanel } from '@/components/site/referral-panel'
 import { AgentCta } from '@/components/site/agent-cta'
 import { Faq } from '@/components/site/faq'
+import { BlogPreview } from '@/components/site/blog-preview'
 import { ContactCta } from '@/components/site/contact'
 import { Footer } from '@/components/site/footer'
 
@@ -34,7 +37,9 @@ export default function Home() {
         <TrustBar />
         <Features />
         <HowItWorks />
+        <NetworkChooser />
         <RateCalculator />
+        <RateExplainer />
         <AgentCalculator />
         <OrderBook />
         <DashboardPreview />
@@ -46,6 +51,7 @@ export default function Home() {
         <ReferralPanel />
         <AgentCta />
         <Faq />
+        <BlogPreview />
         <ContactCta />
       </main>
 

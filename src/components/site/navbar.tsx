@@ -35,12 +35,12 @@ export function Navbar() {
           <Logo />
         </Link>
 
-        <div className="hidden items-center gap-1 lg:flex">
+        <div className="hidden items-center gap-0.5 xl:flex">
           {NAV_LINKS.map((l) => (
             <a
               key={l.href}
               href={l.href}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="rounded-lg px-2.5 py-2 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               {l.label}
             </a>
@@ -60,7 +60,7 @@ export function Navbar() {
             type="button"
             aria-label="Open menu"
             onClick={() => setOpen((v) => !v)}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background/60 backdrop-blur lg:hidden"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background/60 backdrop-blur xl:hidden"
           >
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -74,7 +74,7 @@ export function Navbar() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.2 }}
-            className="mx-auto mt-2 max-w-6xl lg:hidden"
+            className="mx-auto mt-2 max-w-6xl xl:hidden"
           >
             <div className="glass-card rounded-2xl p-3">
               <div className="grid gap-1">
