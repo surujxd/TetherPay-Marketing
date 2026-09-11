@@ -179,11 +179,34 @@
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    touch-action: manipulation;
+    overscroll-behavior-x: none;
+  }
+  html,
+  body {
+    max-width: 100vw;
+    overflow-x: clip;
   }
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "cv11", "ss01", "ss03";
     letter-spacing: -0.011em;
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  img,
+  video,
+  svg {
+    max-width: 100%;
+  }
+  @media (max-width: 767px) {
+    input,
+    textarea,
+    select {
+      font-size: 16px !important;
+    }
   }
   /* Offset anchored sections so the sticky navbar doesn't cover their headings */
   section[id] {
