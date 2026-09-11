@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Text overlap in the top navigation bar where \"Status\" and \"FAQ\" are overlapping.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789106242,
+  "id": "20260911135721911002b07976451d",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260911135721911002b07976451d",
+  "usage": {
+    "completion_tokens": 19,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1742,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1761
+  }
+}

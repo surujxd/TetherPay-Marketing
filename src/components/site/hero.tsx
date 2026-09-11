@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { ArrowRight, ShieldCheck, Zap, ChevronDown } from 'lucide-react'
 import { Eyebrow } from './primitives'
 import { DepositFlowButton } from './deposit-modal'
+import { PaymentFlowButton } from './payment-modal'
 import { formatINR, formatUSDT } from '@/lib/money'
 
 /** Live USDT/INR ticker that animates small fluctuations for a "market alive" feel. */
@@ -134,9 +135,9 @@ function HeroPreviewCard() {
             </div>
             <div className="mt-1 text-xs text-white/70">+ 86.3200 reserved in 2 orders</div>
             <div className="mt-6 flex gap-2">
-              <a href="#calculator" className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-[var(--accent-dark)] transition-transform hover:scale-105">
+              <PaymentFlowButton className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-[var(--accent-dark)] transition-transform hover:scale-105">
                 <ArrowRight className="h-3.5 w-3.5" /> Pay
-              </a>
+              </PaymentFlowButton>
               <DepositFlowButton>
                 <span className="inline-flex items-center gap-1.5 rounded-xl bg-white/15 px-3 py-2 text-xs font-semibold text-white backdrop-blur transition-transform hover:scale-105">
                   Deposit

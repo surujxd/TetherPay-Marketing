@@ -150,12 +150,22 @@ export function AgentCalculator() {
             >
               <div className="rounded-2xl bg-gradient-to-br from-[var(--accent-dark)] to-[var(--accent)] p-4 text-white">
                 <div className="text-xs text-white/80">Est. monthly earnings</div>
-                <div className="mt-1 font-mono text-2xl font-semibold tabular-nums">{formatUSDT(monthlyUsdt.toFixed(8))}</div>
+                <div className="mt-1 flex items-baseline gap-1">
+                  <span className="font-mono text-2xl font-semibold tabular-nums">
+                    {monthlyUsdt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-xs font-medium text-white/70">USDT</span>
+                </div>
                 <div className="mt-1 text-xs text-white/70">incl. {formatINR(commissionInr.toFixed(2))} commission</div>
               </div>
               <div className="rounded-2xl bg-muted/60 p-4">
                 <div className="text-xs text-muted-foreground">Est. yearly earnings</div>
-                <div className="mt-1 font-mono text-2xl font-semibold tabular-nums">{formatUSDT(yearlyUsdt.toFixed(8))}</div>
+                <div className="mt-1 flex items-baseline gap-1">
+                  <span className="font-mono text-2xl font-semibold tabular-nums">
+                    {yearlyUsdt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-xs font-medium text-muted-foreground">USDT</span>
+                </div>
                 <div className="mt-1 text-xs text-muted-foreground">at current volume & tier</div>
               </div>
             </motion.div>

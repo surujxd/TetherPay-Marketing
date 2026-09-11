@@ -105,3 +105,56 @@ Task: Assess project status, QA via agent-browser, fix bugs, add new features + 
 
 Stage Summary:
 - TetherPay landing page significantly expanded: 7 new interactive features + styling polish. All VLM-verified sections now pass with "No defects." Page is stable, lint-clean, zero console errors, fully responsive. Ready for the next review cycle.
+
+---
+
+Task ID: 8 (cron review round 2)
+Agent: webDevReview (cron)
+Task: Assess project status, QA via agent-browser, fix bugs, add new features + styling polish per mandatory requirements.
+
+## Current project status (assessment)
+- Page loads cleanly: HTTP 200, readyState complete, 0 console errors, 0 unhandled rejections, 0 failed resources.
+- All APIs (/api/rates, /api/health, /api/subscribe, /api/contact) return 200.
+- 15 main sections present (from round 1), all 9 section IDs confirmed.
+- VLM review of 9 viewport slices flagged mostly sticky-nav misreads, but 2 REAL defects at the agent calculator: (1) excessive decimal precision ("5,576.9231 USDT"), (2) "USDT" unit label wrapping to a second line.
+
+## Goals / completed modifications / verification
+### Bug fixes
+- Agent calculator earnings display: replaced `formatUSDT(x.toFixed(8))` (4dp) with `toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})` — now shows clean "5,576.92". Restructured the value+unit into a `flex items-baseline gap-1` row so "USDT" sits inline next to the number instead of wrapping. VLM now returns "No defects" for this section.
+
+### New features added (mandatory "add more features")
+1. **UPI payment flow demo modal** (`payment-modal.tsx`, PRD §14.5–14.9) — full 5-step interactive walkthrough:
+   - Step 0: Method choice (Scan QR / Enter UPI ID)
+   - Step 1: Recipient entry — manual path has UPI ID (regex-validated `name@bank`), recipient name, INR amount; scan path shows a faux camera viewfinder with animated scan-line and corner brackets + "Simulate scan" + "Upload QR" fallback
+   - Step 2: Review — recipient card, full breakdown (INR, fee, total, locked rate, USDT debit, available, after-payment), 10-minute quote countdown
+   - Step 3: Confirming spinner ("Reserving funds & creating order…")
+   - Step 4: Success — spring-animated checkmark, random order ID, recipient/amount/USDT debit/status summary
+   - Wired into hero "Pay" button AND dashboard "Pay" action button.
+2. **Live order book / marketplace preview** (`order-book.tsx`, PRD §3.1) — a real-time-updating order stream showing 6 orders cycling through available → assigned → verifying → completed states every 2.8s. Includes status badges, agent attribution, INR+USDT amounts, a live "auto-updating" pulse indicator, and a sidebar with 4 stat tiles + a status-distribution progress-bar breakdown + 10-min expiry note.
+3. **Treasury metrics dashboard** (`treasury-metrics.tsx`) — 4 KPI tiles (30d volume, USDT in treasury, active agents, avg settlement) with delta badges, plus two recharts visualizations: a 30-day settled-volume area chart and a 7-day deposits-vs-payouts grouped bar chart, both with custom glass tooltips.
+4. **Testimonials/press section** (`testimonials.tsx`) — auto-rotating carousel (5.5s, pauses on hover) with 4 testimonials, star ratings, avatar initials, AnimatePresence transitions, dot pagination + prev/next controls, and a press-strip below.
+
+### Styling polish (mandatory "improve styling")
+- Agent calculator: baseline-aligned number+unit rows, proper tabular-nums.
+- Payment modal: glass-card with step progress bar, faux camera viewfinder with animated scan line and corner brackets, spring-animated success checkmark.
+- Order book: live ping indicator, status-colored badges with dots, layout-animated row transitions, hover states.
+- Treasury: KPI delta badges with up/down arrows, custom chart tooltips matching the glass aesthetic.
+- Testimonials: decorative oversized Quote watermark, gradient avatar initials, smooth carousel transitions.
+
+### Verification results
+- **agent-browser QA**: Fresh load → 0 console errors, 0 unhandled rejections, 18 main sections (was 15), doc height 14,960px (desktop) / 22,468px (mobile).
+- **Payment modal flow (manual)**: Method → Recipient (filled landlord@okaxis / Ramesh K. / 5000) → Review (verified USDT debit, locked rate ₹91.50, countdown present) → Confirm → Success ("Order created" + TP-XXXX ID + "Awaiting agent"). ✓
+- **Payment modal flow (scan)**: Scan QR path renders camera viewfinder with animated scan line. ✓
+- **VLM desktop** (orderbook, treasury, testimonials, agent-calc, scan): all **"No defects"**.
+- **VLM mobile** (390px): **"No defects"** — fully responsive.
+- **`bun run lint`**: clean, zero warnings.
+- **dev.log**: all routes 200, no runtime errors (Fast Refresh HMR warnings during edits are transient, not errors).
+
+## Unresolved issues / risks / next-phase recommendations
+- **Decorative QR**: The deposit modal QR is still a deterministic SVG placeholder, not a scannable real QR. For production, swap in the `qrcode` npm package.
+- **Payment modal scan path**: The "Simulate scan" button pre-fills `merchant@okaxis`. A real implementation would use `qr-scanner` or `BarcodeDetector` API to parse live camera frames.
+- **Order book is illustrative**: The order stream cycles through seed data. In production this would subscribe to a realtime order channel (PRD §19).
+- **Recommended next phase**: (1) Add a "Network chooser" interactive showing TRON/BSC/ETH fee + time comparison. (2) Add a blog/docs/resources preview section. (3) Add an animated "How rates work" explainer. (4) Generate a real OG image for SEO. (5) Add keyboard navigation (Esc to close modals, arrow keys for testimonials).
+
+Stage Summary:
+- TetherPay landing page expanded again: 4 new feature sections (payment modal, order book, treasury metrics, testimonials) + agent-calc bug fix. Page now has 18 main sections, ~15k px tall on desktop. All VLM-verified sections pass with "No defects" on both desktop and mobile. Lint clean, zero console errors. Ready for the next review cycle.

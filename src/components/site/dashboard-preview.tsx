@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { SectionHeading, GlassCard } from './primitives'
 import { DepositFlowButton } from './deposit-modal'
+import { PaymentFlowButton } from './payment-modal'
 import { formatINR, formatUSDT } from '@/lib/money'
 
 const NAV = [
@@ -108,7 +109,7 @@ export function DashboardPreview() {
                         <div className="mt-1 text-xs text-white/70">+ 86.3200 reserved</div>
                         <div className="mt-5 grid grid-cols-3 gap-2">
                           <DepositActionBtn icon={ArrowDownToLine} label="Deposit" />
-                          <ActionBtn icon={Send} label="Pay" primary />
+                          <PayActionBtn icon={Send} label="Pay" />
                           <ActionBtn icon={ArrowLeftRight} label="Activity" />
                         </div>
                       </div>
@@ -206,6 +207,15 @@ function DepositActionBtn({ icon: Icon, label }: { icon: any; label: string }) {
         {label}
       </span>
     </DepositFlowButton>
+  )
+}
+
+function PayActionBtn({ icon: Icon, label }: { icon: any; label: string }) {
+  return (
+    <PaymentFlowButton className="inline-flex w-full flex-col items-center gap-1 rounded-xl bg-white py-2.5 text-[11px] font-semibold text-[var(--accent-dark)] transition-all active:scale-95">
+      <Icon className="h-4 w-4" />
+      {label}
+    </PaymentFlowButton>
   )
 }
 

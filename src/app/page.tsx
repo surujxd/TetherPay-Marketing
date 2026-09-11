@@ -8,8 +8,11 @@ import { Features } from '@/components/site/features'
 import { HowItWorks } from '@/components/site/how-it-works'
 import { RateCalculator } from '@/components/site/rate-calculator'
 import { AgentCalculator } from '@/components/site/agent-calculator'
+import { OrderBook } from '@/components/site/order-book'
 import { DashboardPreview } from '@/components/site/dashboard-preview'
+import { TreasuryMetrics } from '@/components/site/treasury-metrics'
 import { Comparison } from '@/components/site/comparison'
+import { Testimonials } from '@/components/site/testimonials'
 import { Security } from '@/components/site/security'
 import { StatusBoard } from '@/components/site/status-board'
 import { ReferralPanel } from '@/components/site/referral-panel'
@@ -33,8 +36,11 @@ export default function Home() {
         <HowItWorks />
         <RateCalculator />
         <AgentCalculator />
+        <OrderBook />
         <DashboardPreview />
+        <TreasuryMetrics />
         <Comparison />
+        <Testimonials />
         <Security />
         <StatusBoard />
         <ReferralPanel />
