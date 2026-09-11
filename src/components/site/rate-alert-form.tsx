@@ -10,6 +10,7 @@ export function RateAlertForm() {
   const [email, setEmail] = React.useState('')
   const [direction, setDirection] = React.useState<'above' | 'below'>('above')
   const [threshold, setThreshold] = React.useState('92.00')
+  const [digest, setDigest] = React.useState<'none' | 'daily' | 'weekly'>('weekly')
   const [loading, setLoading] = React.useState(false)
   const [done, setDone] = React.useState(false)
   const [count, setCount] = React.useState<number | null>(null)
@@ -90,6 +91,11 @@ export function RateAlertForm() {
                   <p className="mt-1 max-w-sm text-sm text-muted-foreground">
                     We&apos;ll email <span className="font-medium text-foreground">{email}</span> when INR/USDT goes{' '}
                     <span className="font-semibold text-[var(--accent)]">{direction} ₹{threshold}</span>.
+                    {digest !== 'none' && (
+                      <span className="block mt-1">
+                        Plus a <span className="font-medium text-[var(--accent)]">{digest}</span> rate digest.
+                      </span>
+                    )}
                   </p>
                   <button
                     onClick={() => { setDone(false); setEmail('') }}
@@ -176,6 +182,31 @@ export function RateAlertForm() {
                         placeholder="92.00"
                         className="w-full rounded-xl border border-border bg-background/50 px-4 py-2.5 font-mono text-sm outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]"
                       />
+                    </div>
+                  </div>
+
+                  {/* Digest frequency */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Also subscribe to rate digest?</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {([
+                        { id: 'none', label: 'No digest' },
+                        { id: 'daily', label: 'Daily' },
+                        { id: 'weekly', label: 'Weekly' },
+                      ] as const).map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setDigest(opt.id)}
+                          className={`rounded-xl border px-3 py-2 text-xs font-medium transition-all ${
+                            digest === opt.id
+                              ? 'border-[var(--accent)] bg-[var(--accent-light)] text-[var(--accent-dark)] dark:text-[var(--accent)]'
+                              : 'border-border bg-background/40 text-muted-foreground hover:bg-muted'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
 

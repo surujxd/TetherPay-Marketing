@@ -87,8 +87,8 @@ export function MarketComparison() {
                     isTetherPay ? 'bg-[var(--accent-light)]/40' : 'hover:bg-muted/30'
                   }`}
                 >
-                  <div className="flex items-center gap-2">
-                    <span className={`text-sm font-semibold ${isTetherPay ? 'text-[var(--accent)]' : ''}`}>{r.name}</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`truncate text-sm font-semibold ${isTetherPay ? 'text-[var(--accent)]' : ''}`}>{r.name}</span>
                     {r.lock && (
                       <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-500">
                         LOCKED

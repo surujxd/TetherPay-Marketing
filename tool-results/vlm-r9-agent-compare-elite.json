@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Text overlap between the main heading \"Side-by-side agent tier comparison\" and the navigation menu items below it.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789111766,
+  "id": "20260911152853e2dcdc59487a4ec7",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260911152853e2dcdc59487a4ec7",
+  "usage": {
+    "completion_tokens": 23,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 951,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 974
+  }
+}

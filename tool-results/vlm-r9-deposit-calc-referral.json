@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Text overlap between the background hero text (\"Know exactly what to see...\") and the navigation menu items.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789111732,
+  "id": "202609111528502a3eb28fb6924b8b",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609111528502a3eb28fb6924b8b",
+  "usage": {
+    "completion_tokens": 22,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 951,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 973
+  }
+}

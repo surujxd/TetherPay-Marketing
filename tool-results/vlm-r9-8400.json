@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Text \"Reimbursed in USDT\" and \"How it works\" overlap in the top-left header area.\nThe \"Standard\" tab's active indicator border appears misaligned or cut off at the top.\nThe \"Est. monthly earnings\" card text is vertically cramped, with the commission line very close to the main value.\nThe \"Est. yearly earnings\" section on the right lacks a background container, creating an unbalanced visual weight compared to the left card.\nThe \"Earn more as you scale\" heading is awkwardly positioned with excessive empty space above it and no clear connection to the content above.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789111251,
+  "id": "20260911152030452906abc5714ba1",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260911152030452906abc5714ba1",
+  "usage": {
+    "completion_tokens": 123,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 951,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1074
+  }
+}
