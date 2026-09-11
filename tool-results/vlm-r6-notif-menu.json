@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Main headline text \"Earn in U... Spend in...\" is truncated and heavily obscured by the \"TRIGGER EVENT\" modal overlay.\nSub-headline text is partially cut off on the right side by the same modal overlay.\nThe \"AVAILABLE BALANCE\" card at the bottom left is partially covered by the cookie consent banner.\nThe \"LATEST ORDER\" list at the bottom right is partially covered by the cookie consent banner.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789109671,
+  "id": "2026091114542677c7b5ec972e42c8",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026091114542677c7b5ec972e42c8",
+  "usage": {
+    "completion_tokens": 85,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1735,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1820
+  }
+}

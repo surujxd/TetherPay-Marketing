@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Cookie consent banner overlaps the bottom content and footer text.\nFooter text is partially obscured by the cookie banner.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789109666,
+  "id": "2026091114542043209fb673e94b68",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026091114542043209fb673e94b68",
+  "usage": {
+    "completion_tokens": 22,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1735,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1757
+  }
+}

@@ -58,3 +58,16 @@ model AnalyticsEvent {
   @@index([event])
   @@index([createdAt])
 }
+
+/// Rate-alert subscriptions — notify users when INR/USDT crosses a threshold.
+model RateAlert {
+  id        String   @id @default(cuid())
+  email     String
+  direction String   // "above" | "below"
+  threshold String   // INR per USDT, stored as string (decimal.js processed)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([active])
+}

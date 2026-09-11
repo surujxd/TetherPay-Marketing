@@ -307,3 +307,52 @@ Task: Assess project status, QA via agent-browser, add new features + styling po
 
 Stage Summary:
 - TetherPay landing page expanded again: 4 new features (inline glossary tooltips in copy, blockchain network status widget + API, cookie consent banner, section divider) + styling polish. Page now has 24 main sections, ~20k px tall on desktop. All VLM-verified sections pass with "No defects". Lint clean, zero console errors, fully responsive. Ready for the next review cycle.
+
+---
+
+Task ID: 12 (cron review round 6)
+Agent: webDevReview (cron)
+Task: Assess project status, QA via agent-browser, fix bugs, add new features + styling polish per mandatory requirements.
+
+## Current project status (assessment)
+- Page loads cleanly: HTTP 200, 0 console errors, 0 unhandled rejections.
+- All APIs (/api/rates, /api/health, /api/subscribe, /api/contact, /api/network-status) return 200.
+- 24 main sections present (from round 5).
+- VLM full-page sweep (10 viewport slices): found a REAL bug — the cookie consent banner (fixed bottom) was overlapping content behind it across almost every screenshot. This was the dominant defect flagged by VLM.
+
+## Goals / completed modifications / verification
+### Bug fixes
+- **Cookie consent banner overlap** (real bug, identified by VLM across 8/10 screenshots): The fixed-bottom banner was covering ~120px of content. Fixed by adding a `useEffect` that sets `document.body.style.paddingBottom = '140px'` while the banner is visible (and cleans up on dismiss/unmount). Verified: `bodyPaddingBottom: '140px'` confirmed in DOM inspection, footer no longer obscured.
+
+### New features added (mandatory "add more features")
+1. **Agent tier pricing section** (`agent-pricing.tsx`) — 3 commission tiers (Standard 1.50% / Trusted 1.75% / Premium 2.00%) with featured "Popular" ribbon on Trusted, per-tier perks lists with check icons, commission display, monthly fee, payout priority, and "Apply as [Tier]" CTAs. Trusted tier is visually elevated (ring + accent border + -mt-4). Auto-upgrade note at bottom.
+2. **Partner/integration logos strip** (`partners-strip.tsx`) — 8 partner names (TRON, Ethereum, BNB Chain, NPCI UPI, Tronscan, Etherscan, Cloudflare, Supabase) rendered as colored text marks with brand-appropriate colors, hover opacity transition, motion staggered entrance. "Built on trusted infrastructure" heading.
+3. **Market rate comparison widget** (`market-comparison.tsx`) — interactive table comparing TetherPay vs Binance P2P / WazirX / Coindcx / Bank wire for a user-entered INR amount. Shows rate, fee, net USDT received, and diff vs TetherPay baseline (with trending up/down icons). TetherPay row highlighted with accent background + "LOCKED" badge. "BEST*" badge on the highest-net row. Live recalculation on amount change.
+4. **Notification toast demo system** (`notification-demo.tsx`) — a bell button in the navbar (with live ping indicator) that opens a dropdown of 6 event types (deposit credited, order completed, agent claimed, rate alert, payout sent, referral reward). Clicking fires a Sonner toast with the event title + message in the bottom-right. Click-outside-to-close, type-colored icons.
+
+### Styling polish (mandatory "improve styling")
+- Agent pricing: featured tier with ring + accent border + rotated "Popular" ribbon, elevated (-mt-4), check-icon perk lists.
+- Partners strip: brand-colored text marks, staggered motion entrance, hover opacity.
+- Market comparison: accent-highlighted TetherPay row, LOCKED/BEST badges, trending up/down diff indicators, hover row highlight.
+- Notification demo: bell with animated ping, glass dropdown menu, type-colored icon badges (success/warning/info rings), Sonner toast integration.
+
+### Verification results
+- **agent-browser QA**: Fresh load → 0 console errors, 0 runtime errors, **27 main sections** (was 24), 71 buttons, doc height 22,231px (desktop).
+- **Cookie padding fix**: `bodyPaddingBottom: '140px'` confirmed ✓ — footer no longer obscured.
+- **Agent pricing**: section present ✓, 3 tiers render with featured ribbon.
+- **Partners strip**: TRON/Binance/NPCI/Cloudflare all present ✓.
+- **Market comparison**: section present ✓, recalculation on amount change verified.
+- **Notification demo**: bell button found ✓, menu opens ✓, event fires Sonner toast ✓.
+- **VLM desktop** (market, notif-toast): **"No defects"**.
+- **VLM mobile** (390px): **"No defects"** — fully responsive, 27 sections, 72 buttons, padding applied.
+- **`bun run lint`**: clean, zero warnings.
+- **dev.log**: all routes 200, no runtime errors.
+
+## Unresolved issues / risks / next-phase recommendations
+- **Decorative QR**: The deposit modal QR is still a deterministic SVG placeholder. For production, swap in the `qrcode` npm package.
+- **Market comparison rates are illustrative**: The competitor rates are hardcoded for demo. In production, wire to live exchange APIs (Binance, WazirX, etc.).
+- **Cookie consent is basic**: No granular preference controls (analytics/marketing toggles). For full GDPR/DPDPA compliance, add a preference modal.
+- **Recommended next phase**: (1) Add a "guided tour" onboarding overlay for first-time visitors. (2) Add OpenGraph image generation for SEO. (3) Add a newsletter archive / article preview modal. (4) Add a live order tracking demo (full-screen order timeline). (5) Add a "help/support" floating widget. (6) Add a rate-alert subscription form. (7) Consider a real QR library for the deposit modal.
+
+Stage Summary:
+- TetherPay landing page expanded again: 4 new features (agent pricing tiers, partners strip, market rate comparison, notification toast demo) + cookie banner overlap bug fix. Page now has 27 main sections, ~22k px tall on desktop. All VLM-verified sections pass with "No defects". Lint clean, zero console errors, fully responsive. Ready for the next review cycle.

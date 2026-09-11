@@ -22,6 +22,16 @@ export function CookieConsent() {
     }
   }, [])
 
+  // Add bottom padding to body while banner is visible so it doesn't overlap content
+  React.useEffect(() => {
+    if (visible) {
+      document.body.style.paddingBottom = '140px'
+      return () => {
+        document.body.style.paddingBottom = ''
+      }
+    }
+  }, [visible])
+
   const dismiss = (choice: 'accept' | 'decline') => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ choice, at: new Date().toISOString() }))

@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Text overlap between the cookie consent banner and the \"Why we built a ledger-first settlement engine\" card.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789109359,
+  "id": "20260911144917e84881f4d9a4427d",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260911144917e84881f4d9a4427d",
+  "usage": {
+    "completion_tokens": 22,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1735,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1757
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Text overlap at the top of the page where form field labels (\"Your name\", \"you@email.com\") and navigation links are jumbled together.\nCookie consent banner text at the bottom is overlapping with the footer copyright text.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789109364,
+  "id": "20260911144919d9a7acf411554737",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260911144919d9a7acf411554737",
+  "usage": {
+    "completion_tokens": 45,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1735,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1780
+  }
+}

@@ -6,13 +6,16 @@ import { Navbar } from '@/components/site/navbar'
 import { Hero } from '@/components/site/hero'
 import { ActivityTicker } from '@/components/site/activity-ticker'
 import { TrustBar } from '@/components/site/trust-bar'
+import { PartnersStrip } from '@/components/site/partners-strip'
 import { Features } from '@/components/site/features'
 import { HowItWorks } from '@/components/site/how-it-works'
 import { NetworkChooser } from '@/components/site/network-chooser'
 import { NetworkStatusWidget } from '@/components/site/network-status-widget'
 import { RateCalculator } from '@/components/site/rate-calculator'
 import { RateExplainer } from '@/components/site/rate-explainer'
+import { MarketComparison } from '@/components/site/market-comparison'
 import { AgentCalculator } from '@/components/site/agent-calculator'
+import { AgentPricing } from '@/components/site/agent-pricing'
 import { WithdrawalCalculator } from '@/components/site/withdrawal-calculator'
 import { OrderBook } from '@/components/site/order-book'
 import { DashboardPreview } from '@/components/site/dashboard-preview'
@@ -40,13 +43,16 @@ export default function Home() {
         <Hero />
         <ActivityTicker />
         <TrustBar />
+        <PartnersStrip />
         <Features />
         <HowItWorks />
         <NetworkChooser />
         <NetworkStatusWidget />
         <RateCalculator />
         <RateExplainer />
+        <MarketComparison />
         <AgentCalculator />
+        <AgentPricing />
         <WithdrawalCalculator />
         <OrderBook />
         <DashboardPreview />

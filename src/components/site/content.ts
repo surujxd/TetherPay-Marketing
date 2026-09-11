@@ -16,7 +16,7 @@ import {
 export const NAV_LINKS = [
   { label: 'How it works', href: '#how-it-works' },
   { label: 'Rates', href: '#calculator' },
-  { label: 'For Agents', href: '#agents' },
+  { label: 'For Agents', href: '#pricing' },
   { label: 'Compare', href: '#features' },
   { label: 'Referrals', href: '#referrals' },
   { label: 'Glossary', href: '#glossary' },
