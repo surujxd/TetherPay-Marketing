@@ -4,6 +4,7 @@ import * as React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowRight, Calculator, Loader2, RefreshCw, ShieldCheck, Timer, Zap } from 'lucide-react'
 import { SectionHeading, GlassCard } from './primitives'
+import { RateSparkline } from './rate-sparkline'
 import { formatINR, formatUSDT } from '@/lib/money'
 import { toast } from 'sonner'
 
@@ -209,6 +210,11 @@ export function RateCalculator() {
                       </div>
                     </div>
                   )}
+
+                  {/* 24h rate sparkline */}
+                  <div className="mt-4">
+                    <RateSparkline current={Number(quote.rate)} />
+                  </div>
                 </motion.div>
               ) : (
                 <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">

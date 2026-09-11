@@ -17,7 +17,8 @@ export const NAV_LINKS = [
   { label: 'How it works', href: '#how-it-works' },
   { label: 'Rates', href: '#calculator' },
   { label: 'For Agents', href: '#agents' },
-  { label: 'Security', href: '#security' },
+  { label: 'Compare', href: '#features' },
+  { label: 'Referrals', href: '#referrals' },
   { label: 'Status', href: '#status' },
   { label: 'FAQ', href: '#faq' },
 ]

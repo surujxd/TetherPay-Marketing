@@ -29,18 +29,17 @@ export function HowItWorks() {
                 transition={{ duration: 0.5, delay: i * 0.12 }}
                 className="relative"
               >
-                <div className="glass-card relative h-full rounded-3xl p-6">
-                  <div className="flex items-center justify-between">
+                <div className="glass-card relative h-full overflow-hidden rounded-3xl p-6">
+                  <div className="relative flex items-center justify-between">
                     <div className="relative inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-background/60 ring-1 ring-border">
                       <s.icon className="h-6 w-6 text-[var(--accent)]" />
                       <span className="absolute -right-1.5 -top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[11px] font-bold text-[var(--primary-foreground)] shadow-accent">
                         {i + 1}
                       </span>
                     </div>
-                    <span className="font-mono text-3xl font-semibold text-muted-foreground/20">{s.n}</span>
                   </div>
-                  <h3 className="mt-5 text-lg font-semibold tracking-tight">{s.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{s.desc}</p>
+                  <h3 className="relative mt-5 text-lg font-semibold tracking-tight">{s.title}</h3>
+                  <p className="relative mt-2 text-sm leading-relaxed text-muted-foreground">{s.desc}</p>
                 </div>
 
                 {i < HOW_STEPS.length - 1 && (

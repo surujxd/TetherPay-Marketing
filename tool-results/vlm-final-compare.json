@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "*   Faint, unstyled text (\"ed at quote\", \"Yes — snapshot\", \"Variable\", \"Market move\") is visible in the header background, appearing like leftover placeholder text or a rendering glitch.\n*   A red browser/system toast notification (\"Could not copy — try manually\") is overlaid on the bottom right, indicating an interrupted user action or a bug during the screenshot capture.\n*   The table comparison section lacks visible column headers, making it unclear what the second, third, and fourth columns represent.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789105913,
+  "id": "20260911135144b6225580eac94dde",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260911135144b6225580eac94dde",
+  "usage": {
+    "completion_tokens": 105,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1729,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1834
+  }
+}

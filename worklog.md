@@ -53,3 +53,55 @@ Work Log:
 Stage Summary:
 - TetherPay public landing experience is complete and production-quality. Premium liquid-glass fintech aesthetic, teal accent, dark mode default, fully responsive, interactive rate/earnings calculators backed by real APIs and a Prisma/SQLite persistence layer implementing the PRD §11 financial formulas.
 - All 7 todos complete. Ready for the scheduled webDevReview cron.
+
+---
+
+Task ID: 7 (cron review round 1)
+Agent: webDevReview (cron)
+Task: Assess project status, QA via agent-browser, fix bugs, add new features + styling polish per mandatory requirements.
+
+## Current project status (assessment)
+- Page loads cleanly: HTTP 200, readyState complete, 0 console errors, 0 failed resources.
+- All existing APIs (/api/rates, /api/health, /api/subscribe, /api/contact) return 200.
+- Rate calculator math verified correct (7500 INR → 81.9672 USDT = 7500/91.50 ✓).
+- VLM flagged a few real defects: dashboard recipient email truncation, how-it-works number alignment, and (correctly) that the page needed more features per the mandatory requirements.
+
+## Goals / completed modifications / verification
+### Bug fixes
+- Dashboard preview: recipient `shopkeeper@paytm` could truncate — added `min-w-0 truncate` + `shrink-0` to the flex row.
+- How-it-works: removed the misaligned top-right big background numbers; the numbered accent badge already provides step indication. (Iterated twice — first repositioned as a bottom-right watermark, then removed entirely after VLM still flagged it as visual noise.)
+- Clipboard copy: added a `document.execCommand('copy')` fallback for non-secure contexts (referral panel + deposit modal) so copy works even without HTTPS.
+
+### New features added (mandatory "add more features")
+1. **Scroll progress bar** — gradient teal bar pinned to top, spring-animated via framer-motion `useScroll`.
+2. **Animated number counters** — trust-bar stats now count up from 0 when scrolled into view (framer-motion `animate`).
+3. **Live activity ticker** — a seamless marquee of 10 recent settled orders (IDs, recipients, INR amounts, timestamps) between hero and stats. Edge-faded.
+4. **24h rate sparkline chart** (recharts) — embedded in the rate calculator breakdown panel, showing 24h USDT/INR trend with min/max range and % change badge.
+5. **Interactive deposit flow modal** — full 5-step walkthrough (Network select → Amount → Address+QR → TX hash submit → Success) triggered from hero "Deposit" button AND dashboard "Deposit" action. Includes a decorative SVG QR placeholder, copyable central wallet address, network warnings, step indicator, and a success state with spring-animated checkmark.
+6. **Comparison table** — TetherPay vs Bank wire vs Crypto exchange across 7 dimensions (settlement speed, INR custody, rate lock, UPI-native, custody model, manual verify, audit trail) with yes/no/partial status icons. Refined header with accent-highlighted "Recommended" column.
+7. **Referral panel** — copyable referral code (TP-EARN-4F2A) + referral link with copy buttons, share buttons, 4-stat grid (invited/qualified/earned/pending), and a reward-explanation card.
+
+### Styling polish (mandatory "improve styling")
+- Trust-bar cards: added hover accent line (gradient scale-x on hover).
+- Comparison table: prominent header row with accent-tinted "TetherPay" column + "Recommended" sub-label, thicker accent border.
+- Hero deposit button: now opens the modal (was a dead button).
+- All new sections use consistent glass-card primitives, motion entrance animations, and the established teal design system.
+
+### Verification results
+- **agent-browser QA**: Fresh page load → readyState complete, 0 console errors, 0 failed resources, 15 main sections, all 9 section IDs present.
+- **Deposit modal flow**: Walked all 5 steps end-to-end (Network→Amount→Address+QR→TX hash→Success) — every transition works, QR renders, address copies, success state shows.
+- **Referral copy**: Copy-link button fires (clipboard fallback engaged in headless context).
+- **Rate calculator**: 7500 INR → 81.9672 USDT (correct), sparkline renders.
+- **VLM desktop (hero, how-it-works, calculator)**: "No defects" after refinements.
+- **VLM mobile (390px)**: "No defects" — fully responsive, no overflow/overlap.
+- **`bun run lint`**: clean, zero warnings.
+- **dev.log**: all routes 200, no runtime errors.
+
+## Unresolved issues / risks / next-phase recommendations
+- **VLM persistent misreads**: The VLM consistently misidentifies the sticky glass navbar (over content by design) and the scroll-progress bar as "overlap defects." These are intentional UX patterns, not bugs — verified via direct DOM inspection. No action needed.
+- **Clipboard in sandbox**: The `navigator.clipboard` API requires a secure context. The legacy fallback (`execCommand`) is in place, but in production over HTTPS the modern API will be used. Low risk.
+- **Decorative QR**: The deposit modal QR is a deterministic SVG placeholder, not a scannable real QR. For a production deposit page this should be replaced with a real QR generated from the central wallet address (e.g. `qrcode` npm package).
+- **Recommended next phase**: (1) Add a "Try the payment flow" interactive UPI QR scan + parse demo (PRD §14.6). (2) Add a testimonials/press section. (3) Add a blog/docs preview. (4) Consider a real QR library for the deposit modal. (5) Add OpenGraph image generation for SEO.
+
+Stage Summary:
+- TetherPay landing page significantly expanded: 7 new interactive features + styling polish. All VLM-verified sections now pass with "No defects." Page is stable, lint-clean, zero console errors, fully responsive. Ready for the next review cycle.

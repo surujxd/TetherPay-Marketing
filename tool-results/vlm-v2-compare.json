@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "- Header navigation text \"Instant speed\" is cut off on the left edge.\n- Small red \"X\" marks are visible next to \"For Agents\" and \"Referrals\" in the top menu, appearing like stray UI artifacts or close buttons.\n- The time indicator \"10-5min\" under the moon icon is partially clipped by the right edge of the header container.\n- The large heading at the bottom (\"Ledger-first...\") has excessive letter-spacing, creating awkward gaps in the words.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789106020,
+  "id": "2026091113533307225d1b2c864f24",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026091113533307225d1b2c864f24",
+  "usage": {
+    "completion_tokens": 102,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1723,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1825
+  }
+}

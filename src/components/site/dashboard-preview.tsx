@@ -19,6 +19,7 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { SectionHeading, GlassCard } from './primitives'
+import { DepositFlowButton } from './deposit-modal'
 import { formatINR, formatUSDT } from '@/lib/money'
 
 const NAV = [
@@ -106,7 +107,7 @@ export function DashboardPreview() {
                         <div className="mt-2 font-mono text-3xl font-semibold tabular-nums">1,248.5040</div>
                         <div className="mt-1 text-xs text-white/70">+ 86.3200 reserved</div>
                         <div className="mt-5 grid grid-cols-3 gap-2">
-                          <ActionBtn icon={ArrowDownToLine} label="Deposit" />
+                          <DepositActionBtn icon={ArrowDownToLine} label="Deposit" />
                           <ActionBtn icon={Send} label="Pay" primary />
                           <ActionBtn icon={ArrowLeftRight} label="Activity" />
                         </div>
@@ -149,9 +150,9 @@ export function DashboardPreview() {
                     </div>
 
                     <div className="mt-4 rounded-xl bg-muted/60 px-4 py-3">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Recipient</span>
-                        <span className="font-mono font-medium">shopkeeper@paytm</span>
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="shrink-0 text-muted-foreground">Recipient</span>
+                        <span className="min-w-0 truncate font-mono font-medium">shopkeeper@paytm</span>
                       </div>
                       <div className="mt-1.5 flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">Amount</span>
@@ -194,6 +195,17 @@ function ActionBtn({ icon: Icon, label, primary }: { icon: any; label: string; p
       <Icon className="h-4 w-4" />
       {label}
     </button>
+  )
+}
+
+function DepositActionBtn({ icon: Icon, label }: { icon: any; label: string }) {
+  return (
+    <DepositFlowButton>
+      <span className="inline-flex w-full flex-col items-center gap-1 rounded-xl bg-white/15 py-2.5 text-[11px] font-semibold text-white backdrop-blur transition-all active:scale-95">
+        <Icon className="h-4 w-4" />
+        {label}
+      </span>
+    </DepositFlowButton>
   )
 }
 
